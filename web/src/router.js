@@ -12,6 +12,7 @@ const routes = [
       { path: 'bookmarks', name: 'bookmarks', component: () => import('./views/BookmarksView.vue') },
       { path: 'tokens', name: 'tokens', component: () => import('./views/TokensView.vue') },
       { path: 'sync-logs', name: 'sync-logs', component: () => import('./views/SyncLogsView.vue') },
+      { path: 'backups', name: 'backups', component: () => import('./views/BackupsView.vue') },
       { path: 'settings', name: 'settings', component: () => import('./views/SettingsView.vue') },
     ],
   },

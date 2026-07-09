@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { db, now, type User } from '../db.js';
 import { hashPassword, verifyPassword, signJwt } from '../lib/auth.js';
 import { config } from '../config.js';
-import { requireJwt, type AuthContext } from '../middleware/auth.js';
+import { requireJwt, requireAuth, type AuthContext } from '../middleware/auth.js';
 import { rateLimit } from '../middleware/rate-limit.js';
 
 const app = new Hono();
@@ -103,7 +103,7 @@ app.post('/logout', (c) => {
   return c.json({ ok: true, data: { logged_out: true } });
 });
 
-app.get('/me', requireJwt, (c) => {
+app.get('/me', requireAuth, (c) => {
   const user = c.get('user' as never) as User;
   return c.json({ ok: true, data: publicUser(user) });
 });

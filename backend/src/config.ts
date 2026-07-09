@@ -12,6 +12,7 @@ export const config = {
     .filter(Boolean),
   logLevel: process.env.LOG_LEVEL || 'info',
   jwtSecretPath: './data/jwt.secret',
+  backupDir: process.env.BACKUP_DIR || './data/backups',
 };
 
 export const isProd = config.nodeEnv === 'production';

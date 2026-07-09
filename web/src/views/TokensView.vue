@@ -3,7 +3,7 @@
     <n-card :bordered="false" style="margin-bottom: 16px">
       <n-space justify="space-between" align="center">
         <n-alert type="info" :show-icon="false" style="max-width: 700px">
-          用于浏览器扩展调用同步 API。<strong>创建后仅显示一次明文，请立即保存到扩展设置中。</strong>
+          用于浏览器扩展调用同步 API。<strong>Token 已加密存储，可通过 👁️ 按钮再次查看明文。</strong>
         </n-alert>
         <n-button type="primary" @click="showCreate = true">
           <template #icon>
@@ -24,7 +24,7 @@
       />
     </n-card>
 
-    <!-- 创建 modal -->
+    <!-- 创建 -->
     <n-modal v-model:show="showCreate" preset="card" title="创建 API Token" style="width: 480px">
       <n-form>
         <n-form-item label="名称">
@@ -40,12 +40,25 @@
       </n-space>
     </n-modal>
 
-    <!-- 显示明文 -->
-    <n-modal v-model:show="showToken" preset="card" title="Token 已创建" style="width: 560px" :mask-closable="false">
-      <n-alert type="warning" style="margin-bottom: 16px">
-        ⚠️ 这是 <strong>唯一一次</strong> 显示明文，请立即复制到扩展中，否则将永久无法找回。
+    <!-- 查看明文 -->
+    <n-modal v-model:show="showToken" preset="card" title="API Token" style="width: 560px" :mask-closable="false">
+      <n-alert type="info" style="margin-bottom: 16px">
+        请复制此 Token 填入浏览器扩展。Token 保管好，避免泄露。
       </n-alert>
-      <n-input :value="plainToken" readonly type="textarea" :autosize="{ minRows: 2 }" />
+      <n-input
+        :value="plainToken"
+        readonly
+        :type="tokenVisible ? 'text' : 'password'"
+        placeholder=""
+      >
+        <template #suffix>
+          <n-button quaternary size="tiny" @click="tokenVisible = !tokenVisible">
+            <template #icon>
+              <n-icon><EyeOutline v-if="!tokenVisible" /><EyeOffOutline v-else /></n-icon>
+            </template>
+          </n-button>
+        </template>
+      </n-input>
       <n-space justify="end" style="margin-top: 12px">
         <n-button @click="copyToken">
           <template #icon>
@@ -53,7 +66,7 @@
           </template>
           复制到剪贴板
         </n-button>
-        <n-button type="primary" @click="showToken = false; plainToken = ''">我已保存</n-button>
+        <n-button type="primary" @click="closeTokenModal">关闭</n-button>
       </n-space>
     </n-modal>
   </div>
@@ -61,9 +74,9 @@
 
 <script setup>
 import { ref, onMounted, h } from 'vue';
-import { NButton, NIcon, NTag } from 'naive-ui';
+import { NButton, NIcon, NTag, NSpace } from 'naive-ui';
 import { useMessage, useDialog } from '../lib/naive-api.js';
-import { AddOutline, TrashOutline, CopyOutline } from '@vicons/ionicons5';
+import { AddOutline, TrashOutline, CopyOutline, EyeOutline, EyeOffOutline } from '@vicons/ionicons5';
 import { tokensApi } from '../api/index.js';
 
 const message = useMessage();
@@ -73,6 +86,7 @@ const tokens = ref([]);
 const loading = ref(false);
 const showCreate = ref(false);
 const showToken = ref(false);
+const tokenVisible = ref(false);
 const creating = ref(false);
 const plainToken = ref('');
 const newToken = ref({ name: '', expires_in_days: null });
@@ -102,16 +116,43 @@ const columns = [
     key: 'expires_at',
     render: (row) => (row.expires_at ? formatDate(row.expires_at) : h(NTag, { size: 'small', type: 'info' }, () => '永不')),
   },
-  { title: '创建时间', key: 'created_at', render: (row) => formatDate(row.created_at) },
+  { title: '创建', key: 'created_at', render: (row) => formatDate(row.created_at) },
   {
     title: '操作',
     key: 'actions',
+    width: 200,
     render: (row) =>
-      h(
-        NButton,
-        { size: 'tiny', type: 'error', quaternary: true, onClick: () => onRevoke(row) },
-        { icon: () => h(NIcon, null, { default: () => h(TrashOutline) }), default: () => '撤销' }
-      ),
+      h(NSpace, { size: 4 }, {
+        default: () => [
+          h(
+            NButton,
+            {
+              size: 'tiny',
+              quaternary: true,
+              disabled: !row.revealable,
+              title: row.revealable ? '查看明文 Token' : '旧版 Token 无法找回',
+              onClick: () => onReveal(row),
+            },
+            {
+              icon: () => h(NIcon, null, { default: () => h(EyeOutline) }),
+              default: () => '查看',
+            }
+          ),
+          h(
+            NButton,
+            {
+              size: 'tiny',
+              type: 'error',
+              quaternary: true,
+              onClick: () => onRevoke(row),
+            },
+            {
+              icon: () => h(NIcon, null, { default: () => h(TrashOutline) }),
+              default: () => '撤销',
+            }
+          ),
+        ],
+      }),
   },
 ];
 
@@ -138,6 +179,7 @@ async function onCreate() {
       expires_in_days: newToken.value.expires_in_days,
     });
     plainToken.value = data.token;
+    tokenVisible.value = false;
     showCreate.value = false;
     showToken.value = true;
     newToken.value = { name: '', expires_in_days: null };
@@ -149,10 +191,21 @@ async function onCreate() {
   }
 }
 
+async function onReveal(row) {
+  try {
+    const data = await tokensApi.reveal(row.id);
+    plainToken.value = data.token;
+    tokenVisible.value = false;
+    showToken.value = true;
+  } catch (err) {
+    message.error(err.message);
+  }
+}
+
 function onRevoke(row) {
   dialog.warning({
     title: '撤销 Token',
-    content: `确定撤销 "${row.name}" 吗？撤销后扩展将无法使用此 Token 同步。`,
+    content: `确定撤销 "${row.name}" 吗？撤销后扩展将无法再使用此 Token 同步。`,
     positiveText: '撤销',
     negativeText: '取消',
     onPositiveClick: async () => {
@@ -174,6 +227,12 @@ async function copyToken() {
   } catch {
     message.warning('复制失败，请手动复制');
   }
+}
+
+function closeTokenModal() {
+  showToken.value = false;
+  plainToken.value = '';
+  tokenVisible.value = false;
 }
 
 function formatDate(ts) {

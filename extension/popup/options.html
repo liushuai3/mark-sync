@@ -5,11 +5,6 @@
   <title>MarkSync 设置</title>
   <link rel="stylesheet" href="options.css">
   <style>
-    .backend-selector { display: flex; gap: 16px; margin-bottom: 12px; }
-    .backend-selector label { display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; }
-    .backend-selector label.active { border-color: #2196F3; background: #E3F2FD; }
-    .config-panel { display: none; padding-top: 8px; border-top: 1px dashed #eee; }
-    .config-panel.active { display: block; }
     .test-btn { padding: 6px 12px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer; }
     .test-btn:hover { background: #444; }
     .test-result { margin-top: 8px; padding: 6px; font-size: 12px; border-radius: 4px; display: none; }
@@ -24,57 +19,25 @@
     <h2>MarkSync 设置</h2>
 
     <div class="form-group">
-      <label>后端类型</label>
-      <div class="backend-selector">
-        <label class="backend-option" data-value="gitee">
-          <input type="radio" name="backend_type" value="gitee"> Gitee Gist
-        </label>
-        <label class="backend-option" data-value="marksync">
-          <input type="radio" name="backend_type" value="marksync"> 自建后端 (MarkSync)
-        </label>
-      </div>
+      <label for="marksyncApiUrl">API URL</label>
+      <input type="text" id="marksyncApiUrl" placeholder="https://marksync.zcoolq.cn/api">
+      <p class="help-text">例：<code>https://marksync.zcoolq.cn/api</code> 或 <code>http://localhost:3000/api</code></p>
     </div>
-
-    <!-- Gitee 配置面板 -->
-    <div id="gitee-panel" class="config-panel">
-      <div class="form-group">
-        <label for="accessToken">Gitee 访问令牌</label>
-        <input type="password" id="accessToken" placeholder="请输入访问令牌">
-      </div>
-      <div class="form-group">
-        <label for="gistDescription">代码片段描述</label>
-        <input type="text" id="gistDescription" placeholder="MarkSync">
-      </div>
-      <div class="form-group">
-        <label for="encryptionKey">加密密钥</label>
-        <input type="password" id="encryptionKey" placeholder="留空使用默认密钥">
-        <p class="help-text">用于加密同步的书签数据</p>
-      </div>
+    <div class="form-group">
+      <label for="marksyncToken">API Token</label>
+      <input type="password" id="marksyncToken" placeholder="mks_xxxxxxxx...">
     </div>
-
-    <!-- MarkSync 配置面板 -->
-    <div id="marksync-panel" class="config-panel">
-      <div class="form-group">
-        <label for="marksyncApiUrl">API URL</label>
-        <input type="text" id="marksyncApiUrl" placeholder="https://bookmark.zcoolq.cn/api">
-        <p class="help-text">例：<code>https://bookmark.zcoolq.cn/api</code> 或 <code>http://localhost:3000/api</code></p>
-      </div>
-      <div class="form-group">
-        <label for="marksyncToken">API Token</label>
-        <input type="password" id="marksyncToken" placeholder="mks_xxxxxxxx...">
-      </div>
-      <div class="form-group">
-        <button type="button" id="testConnBtn" class="test-btn">测试连接</button>
-        <div id="testResult" class="test-result"></div>
-      </div>
-      <div class="help-panel">
-        <strong>📖 如何获取 Token？</strong>
-        <ol style="margin: 6px 0 0 20px; padding: 0;">
-          <li>打开 Web 管理台（API URL 去掉 <code>/api</code>）</li>
-          <li>登录后进入"API Token"页面</li>
-          <li>点击"创建新 Token"，复制生成的 <code>mks_xxx</code></li>
-        </ol>
-      </div>
+    <div class="form-group">
+      <button type="button" id="testConnBtn" class="test-btn">测试连接</button>
+      <div id="testResult" class="test-result"></div>
+    </div>
+    <div class="help-panel">
+      <strong>📖 如何获取 Token？</strong>
+      <ol style="margin: 6px 0 0 20px; padding: 0;">
+        <li>打开 Web 管理台（API URL 去掉 <code>/api</code>）</li>
+        <li>登录后进入"API Token"页面</li>
+        <li>点击"创建新 Token"，复制生成的 <code>mks_xxx</code></li>
+      </ol>
     </div>
 
     <div class="form-group">

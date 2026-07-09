@@ -14,7 +14,7 @@ services:
       - DB_PATH=/app/backend/data/bookmarks.db
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
       - REGISTRATION_OPEN=${REGISTRATION_OPEN:-false}
-      - CORS_ORIGINS=${CORS_ORIGINS:-https://bookmark.zcoolq.cn}
+      - CORS_ORIGINS=${CORS_ORIGINS:-https://marksync.zcoolq.cn}
       - LOG_LEVEL=${LOG_LEVEL:-info}
     volumes:
       - ../backend/data:/app/backend/data

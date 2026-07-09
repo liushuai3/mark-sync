@@ -71,6 +71,7 @@ import {
   PersonCircleOutline,
   LogOutOutline,
   BookmarksOutline,
+  CloudUploadOutline,
 } from '@vicons/ionicons5';
 import { useAuthStore } from '../stores/auth.js';
 import { useThemeStore } from '../stores/theme.js';
@@ -89,6 +90,7 @@ const renderIcon = (icon) => () => h(NIcon, null, { default: () => h(icon) });
 const menuOptions = [
   { label: '仪表盘', key: 'dashboard', icon: renderIcon(HomeOutline) },
   { label: '书签管理', key: 'bookmarks', icon: renderIcon(BookmarksOutline) },
+  { label: '备份与恢复', key: 'backups', icon: renderIcon(CloudUploadOutline) },
   { label: 'API Token', key: 'tokens', icon: renderIcon(KeyOutline) },
   { label: '同步日志', key: 'sync-logs', icon: renderIcon(ListOutline) },
   { label: '设置', key: 'settings', icon: renderIcon(SettingsOutline) },

@@ -157,7 +157,7 @@ CREATE INDEX idx_synclogs_user ON sync_logs(user_id, created_at DESC);
 ```
 Internet
    ↓
-Cloudflare Tunnel (bookmark.zcoolq.cn)
+Cloudflare Tunnel (marksync.zcoolq.cn)
    ↓
 NAS 192.168.31.197:8888
    ↓

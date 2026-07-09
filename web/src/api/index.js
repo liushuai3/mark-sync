@@ -13,6 +13,7 @@ export const tokensApi = {
   list: () => request('/tokens'),
   create: (body) => request('/tokens', { method: 'POST', body }),
   revoke: (id) => request(`/tokens/${id}`, { method: 'DELETE' }),
+  reveal: (id) => request(`/tokens/${id}/reveal`, { method: 'POST' }),
 };
 
 export const bookmarksApi = {
@@ -34,4 +35,19 @@ export const statsApi = {
     const qs = new URLSearchParams(params || {});
     return request(`/sync-logs?${qs}`);
   },
+};
+
+export const settingsApi = {
+  getRegistration: () => request('/settings/registration'),
+  setRegistration: (enabled) => request('/settings/registration', { method: 'PUT', body: { enabled } }),
+};
+
+export const backupsApi = {
+  list: () => request('/backups'),
+  create: (body) => request('/backups', { method: 'POST', body }),
+  remove: (id) => request(`/backups/${id}`, { method: 'DELETE' }),
+  restore: (id) => request(`/backups/${id}/restore`, { method: 'POST' }),
+  downloadUrl: (id) => `/api/backups/${id}/download`,
+  getConfig: () => request('/backups/config'),
+  updateConfig: (body) => request('/backups/config', { method: 'PUT', body }),
 };

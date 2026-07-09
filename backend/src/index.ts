@@ -10,6 +10,9 @@ import tokens from './routes/tokens.js';
 import sync from './routes/sync.js';
 import bookmarks from './routes/bookmarks.js';
 import stats from './routes/stats.js';
+import backups from './routes/backups.js';
+import settings from './routes/settings.js';
+import { startBackupScheduler } from './lib/backup.js';
 import { existsSync } from 'node:fs';
 
 const app = new Hono();
@@ -62,6 +65,8 @@ app.route('/api/auth', auth);
 app.route('/api/tokens', tokens);
 app.route('/api/sync', sync);
 app.route('/api/bookmarks', bookmarks);
+app.route('/api/backups', backups);
+app.route('/api/settings', settings);
 app.route('/api', stats);
 
 // Error handler
@@ -83,5 +88,6 @@ serve(
   },
   (info) => {
     logger.info(`MarkSync backend listening on http://0.0.0.0:${info.port} (${config.nodeEnv})`);
+    startBackupScheduler();
   }
 );

@@ -19,7 +19,7 @@ cd deploy
 docker compose up -d
 ```
 
-访问：https://bookmark.zcoolq.cn（走 Cloudflare Tunnel）
+访问：https://marksync.zcoolq.cn（走 Cloudflare Tunnel）
 
 ### 本地开发
 

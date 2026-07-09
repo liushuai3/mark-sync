@@ -44,6 +44,32 @@ export async function requireJwt(c: Context, next: Next) {
   await next();
 }
 
+// Auth accepting either JWT or API token (useful for endpoints like /auth/me
+// that both the web UI and the extension need to hit for identity checks).
+export async function requireAuth(c: Context, next: Next) {
+  const token = extractToken(c);
+  if (!token) return unauthorized(c);
+  if (token.startsWith('mks_')) {
+    const hash = sha256Hex(token);
+    const row = getTokenByHash.get(hash);
+    if (!row) return unauthorized(c, 'Invalid or expired token');
+    const user = getUserById.get(row.user_id);
+    if (!user) return unauthorized(c, 'User not found');
+    updateTokenUsed.run(Date.now(), row.id);
+    c.set('user', user);
+    c.set('authType', 'token');
+    c.set('token', row);
+  } else {
+    const payload = await verifyJwt(token);
+    if (!payload) return unauthorized(c, 'Invalid or expired token');
+    const user = getUserById.get(payload.userId);
+    if (!user) return unauthorized(c, 'User not found');
+    c.set('user', user);
+    c.set('authType', 'jwt');
+  }
+  await next();
+}
+
 // Auth requiring API token only
 export async function requireApiToken(c: Context, next: Next) {
   const token = extractToken(c);

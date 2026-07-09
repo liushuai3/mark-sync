@@ -39,11 +39,17 @@
       </n-tabs>
 
       <div class="footer">
-        <n-space justify="space-between" align="center">
-          <span class="version">v1.0</span>
-          <span :class="['health', healthy ? 'ok' : 'err']">
-            {{ healthy ? '● 服务在线' : '○ 服务离线' }}
-          </span>
+        <n-space vertical size="small">
+          <n-space justify="space-between" align="center">
+            <span class="version">v1.0</span>
+            <span :class="['health', healthy ? 'ok' : 'err']">
+              {{ healthy ? '● 服务在线' : '○ 服务离线' }}
+            </span>
+          </n-space>
+          <n-button size="small" tertiary block tag="a" :href="extDownloadUrl" download>
+            <template #icon><n-icon><DownloadOutline /></n-icon></template>
+            下载浏览器插件 v{{ extMeta.version }} (.zip)
+          </n-button>
         </n-space>
       </div>
     </n-card>
@@ -54,7 +60,8 @@
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useMessage } from '../lib/naive-api.js';
-import { BookmarkOutline } from '@vicons/ionicons5';
+import { BookmarkOutline, DownloadOutline } from '@vicons/ionicons5';
+import { EXTENSION_META } from '../lib/extension-meta.js';
 import { useAuthStore } from '../stores/auth.js';
 import { authApi } from '../api/index.js';
 import { health } from '../api/client.js';
@@ -70,6 +77,9 @@ const healthy = ref(false);
 
 const loginForm = ref({ username: '', password: '' });
 const registerForm = ref({ username: '', password: '', email: '' });
+
+const extMeta = EXTENSION_META;
+const extDownloadUrl = `/downloads/marksync-extension-${extMeta.version}.zip`;
 
 onMounted(async () => {
   try {

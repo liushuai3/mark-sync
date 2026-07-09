@@ -2,21 +2,13 @@ import {
   syncLocalToCloud,
   syncCloudToLocal,
   forceSyncLocalToCloud,
-  getBackendType,
-  BACKEND_MARKSYNC,
 } from '../utils/syncService.js';
 import { BookmarkManager } from '../utils/bookmarkManager.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
   const statusDiv = document.getElementById('status');
 
-  // Show current backend in status area
-  try {
-    const type = await getBackendType();
-    statusDiv.textContent = `当前后端: ${type === BACKEND_MARKSYNC ? 'MarkSync 自建后端' : 'Gitee Gist'}`;
-  } catch {
-    /* ignore */
-  }
+  statusDiv.textContent = 'MarkSync 已就绪';
 
   document.getElementById('uploadBookmarks').addEventListener('click', async () => {
     try {
@@ -81,7 +73,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Remote management for MarkSync is done on the web dashboard
         const cfg = await chrome.storage.sync.get(['marksync_api_url']);
         let dashboardUrl = cfg.marksync_api_url || '';
-        dashboardUrl = dashboardUrl.replace(/\/api\/?$/, '') || 'https://bookmark.zcoolq.cn';
+        dashboardUrl = dashboardUrl.replace(/\/api\/?$/, '') || 'https://marksync.zcoolq.cn';
         chrome.tabs.create({ url: dashboardUrl });
       } else {
         chrome.tabs.create({ url: chrome.runtime.getURL('popup/remote-bookmark.html') });

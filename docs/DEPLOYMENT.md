@@ -7,7 +7,7 @@
 - NAS: 192.168.31.197 (fn-nas)
 - Docker + Docker Compose
 - Cloudflare Tunnel MCP 已配置（Tunnel ID: `e6f5c810-e338-4607-aec6-007b036dca53`）
-- 目标域名: `bookmark.zcoolq.cn`
+- 目标域名: `marksync.zcoolq.cn`
 
 ### 2. 部署步骤
 
@@ -28,7 +28,7 @@ docker compose logs -f marksync
 # 通过 MCP 工具:
 # fnos-tunnel__tunnel_register_app_domain(
 #   appName="nas",
-#   domain="bookmark.zcoolq.cn",
+#   domain="marksync.zcoolq.cn",
 #   service="http://localhost:8888"
 # )
 ```

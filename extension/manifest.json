@@ -1,15 +1,14 @@
 {
   "manifest_version": 3,
   "name": "MarkSync 书签同步",
-  "version": "1.1.0",
-  "description": "在不同设备间同步浏览器书签，支持 Gitee Gist 和自建后端双模式",
+  "version": "1.2.0",
+  "description": "在不同设备间同步浏览器书签，支持自建后端",
   "permissions": [
     "bookmarks",
     "storage",
     "notifications"
   ],
   "host_permissions": [
-    "https://gitee.com/*",
     "http://localhost/*",
     "https://*/*"
   ],
@@ -35,8 +34,23 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["docs/README.md", "popup/sync-record.html", "popup/popup.css"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "docs/README.md",
+        "popup/sync-record.html",
+        "popup/popup.css"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
-  ]
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "marksync@zcoolq.cn",
+      "strict_min_version": "121.0"
+    },
+    "edge": {
+      "browser_action_next_to_addressbar": true
+    }
+  }
 }

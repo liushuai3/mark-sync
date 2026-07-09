@@ -66,7 +66,7 @@ extension/
   gitee_token: '...',                       // 原有
   gitee_description: 'MarkSync',            // 原有
   encryption_key: '...',                    // 原有（Gitee 模式）
-  marksync_api_url: 'https://bookmark.zcoolq.cn/api',  // 新增
+  marksync_api_url: 'https://marksync.zcoolq.cn/api',  // 新增
   marksync_token: 'mks_...',                // 新增
   auto_sync: true,                          // 原有
 }
@@ -160,12 +160,12 @@ export class MarkSyncBackend {
 加密密钥: [____________]
 
 --- MarkSync 配置 ---（仅当选自建后端时显示）
-API URL: [https://bookmark.zcoolq.cn/api]
+API URL: [https://marksync.zcoolq.cn/api]
 API Token: [mks_____________________]
 [测试连接]
 
 📖 如何获取 Token？
-  1. 打开 https://bookmark.zcoolq.cn
+  1. 打开 https://marksync.zcoolq.cn
   2. 登录后进入"API Token"页面
   3. 点击"创建新 Token"
 ```

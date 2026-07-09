@@ -1,6 +1,6 @@
 # MarkSync API 规范
 
-Base URL: `https://bookmark.zcoolq.cn/api` (prod) / `http://localhost:3000/api` (dev)
+Base URL: `https://marksync.zcoolq.cn/api` (prod) / `http://localhost:3000/api` (dev)
 
 所有响应统一格式：
 ```json
