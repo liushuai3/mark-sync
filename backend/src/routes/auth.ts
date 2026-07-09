@@ -31,6 +31,9 @@ const insertUser = db.prepare(
   'INSERT INTO users (username, email, password_hash, is_admin, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
 );
 const updatePasswordStmt = db.prepare('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?');
+const getDbSetting = db.prepare<[string], { value: string }>(
+  'SELECT value FROM settings WHERE key = ? LIMIT 1'
+);
 
 app.post('/register', rateLimit('register', 5, 60_000), async (c) => {
   const parsed = registerSchema.safeParse(await c.req.json().catch(() => ({})));
@@ -42,8 +45,12 @@ app.post('/register', rateLimit('register', 5, 60_000), async (c) => {
   const userCount = countUsers.get()?.c || 0;
   const isFirstUser = userCount === 0;
 
-  if (!isFirstUser && !config.registrationOpen) {
-    return c.json({ ok: false, error: 'Registration closed', code: 'REG_CLOSED' }, 403);
+  // Check DB registration_open setting (no env fallback)
+  if (!isFirstUser) {
+    const dbSetting = getDbSetting.get('registration_open');
+    if (!dbSetting || dbSetting.value !== 'true') {
+      return c.json({ ok: false, error: 'Registration closed', code: 'REG_CLOSED' }, 403);
+    }
   }
 
   if (getUserByUsername.get(username)) {
@@ -89,12 +96,14 @@ app.post('/login', rateLimit('login', 5, 60_000), async (c) => {
 
 app.get('/status', (c) => {
   const userCount = countUsers.get()?.c || 0;
+  const dbSetting = getDbSetting.get('registration_open');
+  const regOpen = !!dbSetting && dbSetting.value === 'true';
   return c.json({
     ok: true,
     data: {
       has_users: userCount > 0,
-      registration_open: config.registrationOpen,
-      can_register: userCount === 0 || config.registrationOpen,
+      registration_open: regOpen,
+      can_register: userCount === 0 || regOpen,
     },
   });
 });
@@ -121,6 +130,25 @@ app.put('/password', requireJwt, async (c) => {
   updatePasswordStmt.run(newHash, now(), user.id);
   return c.json({ ok: true, data: { changed: true } });
 });
+
+/**
+ * Ensure admin user from env ADMIN_USERNAME / ADMIN_PASSWORD.
+ * Called at startup.
+ */
+export async function ensureAdminUser(): Promise<void> {
+  const username = config.adminUsername;
+  const password = config.adminPassword;
+  if (!username || !password) return;
+  const existing = getUserByUsername.get(username);
+  if (existing && existing.is_admin) return;
+  if (existing) {
+    db.prepare('UPDATE users SET is_admin = 1, updated_at = ? WHERE id = ?').run(now(), existing.id);
+    return;
+  }
+  const passwordHash = await hashPassword(password);
+  const ts = now();
+  insertUser.run(username, null, passwordHash, 1, ts, ts);
+}
 
 function publicUser(u: User) {
   return {

@@ -3,7 +3,7 @@
     <n-card :bordered="false" style="margin-bottom: 16px">
       <n-space justify="space-between" align="center">
         <n-alert type="info" :show-icon="false" style="max-width: 700px">
-          用于浏览器扩展调用同步 API。<strong>Token 已加密存储，可通过 👁️ 按钮再次查看明文。</strong>
+          用于浏览器扩展调用同步 API。<strong>Token 已加密存储，可随时通过 👁️ 按钮查看原文。</strong>
         </n-alert>
         <n-button type="primary" @click="showCreate = true">
           <template #icon>
@@ -43,7 +43,7 @@
     <!-- 查看明文 -->
     <n-modal v-model:show="showToken" preset="card" title="API Token" style="width: 560px" :mask-closable="false">
       <n-alert type="info" style="margin-bottom: 16px">
-        请复制此 Token 填入浏览器扩展。Token 保管好，避免泄露。
+        请复制此 Token 填入浏览器扩展。Token 已加密保管，可随时在列表中点 👁️ 查看。
       </n-alert>
       <n-input
         :value="plainToken"

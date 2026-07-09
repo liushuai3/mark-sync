@@ -13,6 +13,8 @@ const routes = [
       { path: 'tokens', name: 'tokens', component: () => import('./views/TokensView.vue') },
       { path: 'sync-logs', name: 'sync-logs', component: () => import('./views/SyncLogsView.vue') },
       { path: 'backups', name: 'backups', component: () => import('./views/BackupsView.vue') },
+      { path: 'extension', name: 'extension', component: () => import('./views/ExtensionView.vue') },
+      { path: 'users', name: 'users', component: () => import('./views/UsersView.vue') },
       { path: 'settings', name: 'settings', component: () => import('./views/SettingsView.vue') },
     ],
   },

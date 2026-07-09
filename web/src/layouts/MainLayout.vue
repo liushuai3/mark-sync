@@ -18,7 +18,7 @@
         :collapsed="collapsed"
         :collapsed-width="64"
         :collapsed-icon-size="22"
-        :options="menuOptions"
+        :options="visibleMenuOptions"
         :value="activeKey"
         @update:value="onMenuClick"
       />
@@ -72,6 +72,8 @@ import {
   LogOutOutline,
   BookmarksOutline,
   CloudUploadOutline,
+  PeopleOutline,
+  ExtensionPuzzleOutline,
 } from '@vicons/ionicons5';
 import { useAuthStore } from '../stores/auth.js';
 import { useThemeStore } from '../stores/theme.js';
@@ -91,6 +93,8 @@ const menuOptions = [
   { label: '仪表盘', key: 'dashboard', icon: renderIcon(HomeOutline) },
   { label: '书签管理', key: 'bookmarks', icon: renderIcon(BookmarksOutline) },
   { label: '备份与恢复', key: 'backups', icon: renderIcon(CloudUploadOutline) },
+  { label: '浏览器插件', key: 'extension', icon: renderIcon(ExtensionPuzzleOutline) },
+  { label: '用户管理', key: 'users', icon: renderIcon(PeopleOutline), show: () => auth.user?.is_admin },
   { label: 'API Token', key: 'tokens', icon: renderIcon(KeyOutline) },
   { label: '同步日志', key: 'sync-logs', icon: renderIcon(ListOutline) },
   { label: '设置', key: 'settings', icon: renderIcon(SettingsOutline) },
@@ -101,6 +105,9 @@ const userMenu = [
 ];
 
 const activeKey = computed(() => route.name || 'dashboard');
+const visibleMenuOptions = computed(() =>
+  menuOptions.filter((o) => !o.show || o.show())
+);
 const pageTitle = computed(() => {
   const found = menuOptions.find((m) => m.key === activeKey.value);
   return found?.label || 'MarkSync';

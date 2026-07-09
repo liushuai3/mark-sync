@@ -5,13 +5,14 @@ import { cors } from 'hono/cors';
 import { config, isProd } from './config.js';
 import { logger } from './lib/logger.js';
 import { errorHandler } from './middleware/error.js';
-import auth from './routes/auth.js';
+import auth, { ensureAdminUser } from './routes/auth.js';
 import tokens from './routes/tokens.js';
 import sync from './routes/sync.js';
 import bookmarks from './routes/bookmarks.js';
 import stats from './routes/stats.js';
 import backups from './routes/backups.js';
 import settings from './routes/settings.js';
+import users from './routes/users.js';
 import { startBackupScheduler } from './lib/backup.js';
 import { existsSync } from 'node:fs';
 
@@ -67,6 +68,7 @@ app.route('/api/sync', sync);
 app.route('/api/bookmarks', bookmarks);
 app.route('/api/backups', backups);
 app.route('/api/settings', settings);
+app.route('/api/users', users);
 app.route('/api', stats);
 
 // Error handler
@@ -89,5 +91,6 @@ serve(
   (info) => {
     logger.info(`MarkSync backend listening on http://0.0.0.0:${info.port} (${config.nodeEnv})`);
     startBackupScheduler();
+    ensureAdminUser().catch((err) => logger.error('ensureAdminUser failed', err));
   }
 );

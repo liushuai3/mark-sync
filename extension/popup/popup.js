@@ -49,7 +49,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   document.getElementById('helpButton').addEventListener('click', () => {
-    chrome.tabs.create({ url: chrome.runtime.getURL('popup/help.html') });
+    chrome.tabs.create({ url: 'https://marksync.zcoolq.cn/help.html' });
   });
 
   document.getElementById('forceUpload').addEventListener('click', async () => {
@@ -68,16 +68,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   const remoteBookmarkButton = document.getElementById('remoteBookmarkButton');
   if (remoteBookmarkButton) {
     remoteBookmarkButton.addEventListener('click', async () => {
-      const type = await getBackendType();
-      if (type === BACKEND_MARKSYNC) {
-        // Remote management for MarkSync is done on the web dashboard
-        const cfg = await chrome.storage.sync.get(['marksync_api_url']);
-        let dashboardUrl = cfg.marksync_api_url || '';
-        dashboardUrl = dashboardUrl.replace(/\/api\/?$/, '') || 'https://marksync.zcoolq.cn';
-        chrome.tabs.create({ url: dashboardUrl });
-      } else {
-        chrome.tabs.create({ url: chrome.runtime.getURL('popup/remote-bookmark.html') });
-      }
+      const cfg = await chrome.storage.sync.get(['marksync_api_url']);
+      const base = (cfg.marksync_api_url || 'https://marksync.zcoolq.cn/api').replace(/\/api\/?$/, '');
+      chrome.tabs.create({ url: base + '/bookmarks' });
     });
   }
 });

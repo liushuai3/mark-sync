@@ -5,7 +5,8 @@ export const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   dbPath: process.env.DB_PATH || './data/bookmarks.db',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
-  registrationOpen: process.env.REGISTRATION_OPEN === 'true',
+  adminUsername: process.env.ADMIN_USERNAME || '',
+  adminPassword: process.env.ADMIN_PASSWORD || '',
   corsOrigins: (process.env.CORS_ORIGINS || 'http://localhost:5173')
     .split(',')
     .map((s) => s.trim())

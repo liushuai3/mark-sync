@@ -1,7 +1,7 @@
 <template>
   <n-space vertical size="large">
-    <!-- 注册开关 -->
-    <n-card title="注册设置" :bordered="false">
+    <!-- 注册开关（仅管理员可见） -->
+    <n-card v-if="auth.user?.is_admin" title="注册设置" :bordered="false">
       <n-space align="center">
         <span>允许新用户注册：</span>
         <n-switch :value="regEnabled" :disabled="regLoading" @update:value="onToggleReg" />
@@ -40,51 +40,16 @@
         <n-descriptions-item label="Uptime">{{ serverInfo ? formatUptime(serverInfo.uptime) : '-' }}</n-descriptions-item>
       </n-descriptions>
     </n-card>
-
-    <n-card title="浏览器插件" :bordered="false">
-      <n-space vertical>
-        <n-alert type="info" :show-icon="false">
-          <p><strong>安装方式（Chrome/Edge）：</strong></p>
-          <p>1. 下载插件 zip 包并解压</p>
-          <p>2. 浏览器访问 <code>chrome://extensions</code></p>
-          <p>3. 打开“开发者模式” → “加载已解压的扩展” → 选择解压后的目录</p>
-          <p>4. 在插件设置页面填入下方的 API URL 和 API Token</p>
-        </n-alert>
-        <n-space>
-          <n-button type="primary" tag="a" :href="extDownloadUrl" download>
-            <template #icon><n-icon><DownloadOutline /></n-icon></template>
-            下载插件 v{{ extMeta.version }} (.zip)
-          </n-button>
-          <n-button tag="a" href="/downloads/marksync-extension-latest.zip" download>
-            <template #icon><n-icon><DownloadOutline /></n-icon></template>
-            最新版（固定名）
-          </n-button>
-        </n-space>
-      </n-space>
-    </n-card>
-
-    <n-card title="扩展配置信息" :bordered="false">
-      <n-alert type="info" :show-icon="false">
-        <p><strong>在扩展的“设置”页面填入：</strong></p>
-        <p>API URL: <code>{{ apiUrl }}</code></p>
-        <p>API Token: 在“API Token”页面创建后填入</p>
-      </n-alert>
-    </n-card>
   </n-space>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
-import { DownloadOutline } from '@vicons/ionicons5';
+import { ref, onMounted } from 'vue';
 import { useMessage } from '../lib/naive-api.js';
 import { useAuthStore } from '../stores/auth.js';
 import { authApi } from '../api/index.js';
 import { health } from '../api/client.js';
 import { settingsApi } from '../api/index.js';
-import { EXTENSION_META } from '../lib/extension-meta.js';
-
-const extMeta = EXTENSION_META;
-const extDownloadUrl = `/downloads/marksync-extension-${extMeta.version}.zip`;
 
 const auth = useAuthStore();
 const message = useMessage();
@@ -95,8 +60,6 @@ const serverInfo = ref(null);
 const regEnabled = ref(false);
 const regLoading = ref(false);
 const regSource = ref('');
-
-const apiUrl = computed(() => `${window.location.origin}/api`);
 
 async function onChangePassword() {
   if (!pwdForm.value.old_password || !pwdForm.value.new_password) {
@@ -158,6 +121,8 @@ onMounted(async () => {
   try {
     serverInfo.value = await health();
   } catch {}
-  await loadRegistrationSetting();
+  if (auth.user?.is_admin) {
+    await loadRegistrationSetting();
+  }
 });
 </script>

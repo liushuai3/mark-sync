@@ -1,33 +1,187 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <link rel="stylesheet" href="popup.css">
-  <link rel="stylesheet" href="help.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MarkSync 使用说明</title>
   <style>
-    body {
-      margin: 0;
-      padding: 20px;
-      font-size: 14px;
-      line-height: 1.6;
-    }
-    .help-page {
-      display: block;
-      max-width: 800px;
-      margin: 0 auto;
-    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; line-height: 1.7; }
+    .container { max-width: 800px; margin: 0 auto; padding: 24px 16px; }
+    h1 { font-size: 24px; margin-bottom: 8px; color: #222; }
+    h2 { font-size: 18px; margin: 24px 0 12px; padding-bottom: 6px; border-bottom: 2px solid #2196F3; color: #2196F3; }
+    h3 { font-size: 15px; margin: 16px 0 8px; color: #444; }
+    p, li { font-size: 14px; color: #555; margin-bottom: 8px; }
+    ul, ol { margin-left: 20px; }
+    code { background: #e3f2fd; padding: 2px 6px; border-radius: 3px; font-size: 13px; color: #1565C0; }
+    .step { display: flex; gap: 12px; margin-bottom: 16px; padding: 12px; background: white; border-radius: 8px; border-left: 3px solid #2196F3; }
+    .step-num { flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%; background: #2196F3; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; }
+    .step-content { flex: 1; }
+    .btn { display: inline-block; margin: 8px 4px 0 0; padding: 6px 14px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; text-decoration: none; }
+    .btn:hover { background: #1976D2; }
+    .btn.secondary { background: #666; }
+    .btn.secondary:hover { background: #444; }
+    .faq { margin-top: 16px; }
+    .faq-item { background: white; border-radius: 8px; margin-bottom: 8px; overflow: hidden; }
+    .faq-q { padding: 12px 16px; font-weight: 600; cursor: pointer; font-size: 14px; }
+    .faq-q:hover { background: #fafafa; }
+    .faq-a { padding: 0 16px 12px; font-size: 13px; color: #666; display: none; }
+    .faq-item.open .faq-a { display: block; }
+    .header { text-align: center; padding: 16px 0; }
+    .header .logo { font-size: 40px; margin-bottom: 8px; }
+    .header p { color: #888; font-size: 13px; }
+    .toc { background: white; border-radius: 8px; padding: 16px; margin-bottom: 24px; }
+    .toc a { display: block; padding: 6px 0; color: #2196F3; text-decoration: none; font-size: 14px; }
+    .toc a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
-  <div class="help-page">
-    <div class="help-header">
-      <h1>使用说明</h1>
-      <button class="close-button" id="closeHelp">×</button>
+  <div class="container">
+    <div class="header">
+      <div class="logo">📎</div>
+      <h1>MarkSync 书签同步</h1>
+      <p>在不同设备间同步浏览器书签 · v1.2.0</p>
     </div>
-    <div class="help-content" id="helpContent">
-      <div class="loading">加载中...</div>
+
+    <div class="toc">
+      <strong>目录</strong>
+      <a href="#install">📥 安装插件</a>
+      <a href="#config">⚙️ 配置 API 连接</a>
+      <a href="#sync">🔄 同步指南</a>
+      <a href="#faq">❓ 常见问题</a>
+    </div>
+
+    <h2 id="install">📥 安装插件</h2>
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <strong>下载插件</strong>
+        <p>在 Web 管理台的 <strong>「浏览器插件」</strong> 页面下载 <code>marksync-extension-1.2.0.zip</code></p>
+        <p>或者直接去 <a class="btn btn-small" href="https://marksync.zcoolq.cn/downloads/marksync-extension-1.2.0.zip" target="_blank">下载</a></p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <strong>解压</strong>
+        <p>将 zip 包解压到任意文件夹，记住这个位置。</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <strong>加载扩展</strong>
+        <p>浏览器地址栏输入 <code>chrome://extensions</code>（Edge 用 <code>edge://extensions</code>）</p>
+        <p>打开右上角 <strong>「开发者模式」</strong> 开关，点击 <strong>「加载已解压的扩展」</strong>，选择解压后的文件夹。</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-content">
+        <strong>配置 API 连接</strong>
+        <p>右键扩展工具栏图标 → 「选项」或「设置」，填入 API URL 和 Token。</p>
+      </div>
+    </div>
+
+    <h2 id="config">⚙️ 配置 API 连接</h2>
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <strong>获取 API URL</strong>
+        <p>你的服务地址：<code>https://marksync.zcoolq.cn/api</code></p>
+        <p>如果部署在本地：<code>http://localhost:3000/api</code></p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <strong>创建 API Token</strong>
+        <p>登录 Web 管理台 → 「API Token」页面 → 点击「创建新 Token」</p>
+        <p>创建后复制 <code>mks_xxx</code> 格式的 Token（可随时在列表中点 👁️ 查看）</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <strong>测试连接</strong>
+        <p>在扩展设置页面填入 URL 和 Token 后，点击「测试连接」验证。</p>
+      </div>
+    </div>
+
+    <h2 id="sync">🔄 同步指南</h2>
+    <div class="step">
+      <div class="step-num">📤</div>
+      <div class="step-content">
+        <strong>本地同步到云端</strong>
+        <p>将浏览器当前的书签上传到服务器。同一书签不会重复上传。</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">📥</div>
+      <div class="step-content">
+        <strong>云端同步到本地</strong>
+        <p>将服务器上的书签下载到当前浏览器。</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">⚡</div>
+      <div class="step-content">
+        <strong>强制同步</strong>
+        <p>用本地书签完全覆盖云端（不可恢复）。</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">⏰</div>
+      <div class="step-content">
+        <strong>自动同步</strong>
+        <p>在扩展设置页面勾选「启用自动同步」，书签变更后自动上传到云端。</p>
+      </div>
+    </div>
+
+    <h2 id="faq">❓ 常见问题</h2>
+    <div class="faq">
+      <div class="faq-item open">
+        <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">插件无法连接？</div>
+        <div class="faq-a">
+          <ul>
+            <li>确认 API URL 以 <code>/api</code> 结尾</li>
+            <li>确认 Token 未过期且在「API Token」页面未撤销</li>
+            <li>如果使用 HTTPS，确保证书有效</li>
+            <li>Firefox 用户请打开 <code>about:debugging#/runtime/this-firefox</code> 加载</li>
+          </ul>
+        </div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">如何备份书签？</div>
+        <div class="faq-a">
+          <p>登录 Web 管理台 → 「备份与恢复」页面，可以设置自动备份或手动创建备份，随时可恢复。</p>
+        </div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">数据安全性如何？</div>
+        <div class="faq-a">
+          <p>所有数据通过 HTTPS 加密传输，Token 在服务端使用 AES-256 加密存储。这是自托管方案，完全由你自己控制数据。</p>
+        </div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">支持哪些浏览器？</div>
+        <div class="faq-a">
+          <p>支持 Chrome、Edge、Firefox（121+）。基于 Manifest V3。</p>
+          <p>Firefox 安装方式：打开 <code>about:debugging#/runtime/this-firefox</code> → 临时加载附加组件 → 选择解压后的 manifest.json</p>
+        </div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">远程书签管理怎么用？</div>
+        <div class="faq-a">
+          <p>点击扩展弹窗的 🔍 按钮会打开 Web 管理台，登录后可在「书签管理」页面查看和编辑所有云端书签。</p>
+        </div>
+      </div>
+    </div>
+
+    <div style="text-align:center; padding: 32px 0 16px; color: #999; font-size: 12px;">
+      <p>MarkSync · 轻量级书签同步系统</p>
+      <p style="margin-top:4px"><a href="https://marksync.zcoolq.cn" style="color:#2196F3; text-decoration:none;">https://marksync.zcoolq.cn</a></p>
     </div>
   </div>
-  <script src="help.js" type="module"></script>
 </body>
-</html> 
+</html>

@@ -37,11 +37,6 @@ export const statsApi = {
   },
 };
 
-export const settingsApi = {
-  getRegistration: () => request('/settings/registration'),
-  setRegistration: (enabled) => request('/settings/registration', { method: 'PUT', body: { enabled } }),
-};
-
 export const backupsApi = {
   list: () => request('/backups'),
   create: (body) => request('/backups', { method: 'POST', body }),
@@ -50,4 +45,15 @@ export const backupsApi = {
   downloadUrl: (id) => `/api/backups/${id}/download`,
   getConfig: () => request('/backups/config'),
   updateConfig: (body) => request('/backups/config', { method: 'PUT', body }),
+};
+
+export const settingsApi = {
+  getRegistration: () => request('/settings/registration'),
+  setRegistration: (enabled) => request('/settings/registration', { method: 'PUT', body: { enabled } }),
+};
+
+export const usersApi = {
+  list: () => request('/users'),
+  remove: (id) => request(`/users/${id}`, { method: 'DELETE' }),
+  update: (id, body) => request(`/users/${id}`, { method: 'PUT', body }),
 };

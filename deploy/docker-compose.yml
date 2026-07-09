@@ -16,6 +16,8 @@ services:
       - REGISTRATION_OPEN=${REGISTRATION_OPEN:-false}
       - CORS_ORIGINS=${CORS_ORIGINS:-https://marksync.zcoolq.cn}
       - LOG_LEVEL=${LOG_LEVEL:-info}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
     volumes:
       - ../backend/data:/app/backend/data
     healthcheck:
