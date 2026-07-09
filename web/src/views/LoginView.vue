@@ -9,7 +9,7 @@
         <p class="tagline">轻量级书签同步系统</p>
       </div>
 
-      <n-tabs v-model:value="mode" type="segment" animated>
+      <n-tabs v-if="canRegister" v-model:value="mode" type="segment" animated>
         <n-tab-pane name="login" tab="登录">
           <n-form ref="loginRef" :model="loginForm" @submit.prevent="onLogin">
             <n-form-item path="username" label="用户名">
@@ -21,8 +21,8 @@
             <n-button type="primary" block :loading="loading" @click="onLogin">登录</n-button>
           </n-form>
         </n-tab-pane>
-        <n-tab-pane v-if="canRegister" name="register" tab="注册">
-          <n-form v-if="canRegister" ref="registerRef" :model="registerForm" @submit.prevent="onRegister">
+        <n-tab-pane name="register" tab="注册">
+          <n-form ref="registerRef" :model="registerForm" @submit.prevent="onRegister">
             <n-form-item path="username" label="用户名">
               <n-input v-model:value="registerForm.username" placeholder="至少 3 个字符" />
             </n-form-item>
@@ -34,9 +34,21 @@
             </n-form-item>
             <n-button type="primary" block :loading="loading" @click="onRegister">注册并登录</n-button>
           </n-form>
-          <n-empty v-else description="注册已关闭" />
         </n-tab-pane>
       </n-tabs>
+
+      <!-- 注册关闭时只显示登录表单，避免 segment 只剩一个 tab 时样式异常 -->
+      <template v-else>
+        <n-form ref="loginRef" :model="loginForm" @submit.prevent="onLogin">
+          <n-form-item path="username" label="用户名">
+            <n-input v-model:value="loginForm.username" placeholder="用户名" />
+          </n-form-item>
+          <n-form-item path="password" label="密码">
+            <n-input v-model:value="loginForm.password" type="password" show-password-on="click" placeholder="密码" @keydown.enter.prevent="onLogin" />
+          </n-form-item>
+          <n-button type="primary" block :loading="loading" @click="onLogin">登录</n-button>
+        </n-form>
+      </template>
 
       <div class="footer">
         <n-space vertical size="small">
@@ -46,9 +58,9 @@
               {{ healthy ? '● 服务在线' : '○ 服务离线' }}
             </span>
           </n-space>
-          <n-button size="small" tertiary block tag="a" :href="extDownloadUrl" download>
+          <n-button size="small" tertiary block tag="a" href="/downloads/marksync-extension-latest.zip" download>
             <template #icon><n-icon><DownloadOutline /></n-icon></template>
-            下载浏览器插件 v{{ extMeta.version }} (.zip)
+            下载浏览器插件 (.zip)
           </n-button>
         </n-space>
       </div>
@@ -61,7 +73,6 @@ import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useMessage } from '../lib/naive-api.js';
 import { BookmarkOutline, DownloadOutline } from '@vicons/ionicons5';
-import { EXTENSION_META } from '../lib/extension-meta.js';
 import { useAuthStore } from '../stores/auth.js';
 import { authApi } from '../api/index.js';
 import { health } from '../api/client.js';
@@ -77,9 +88,6 @@ const healthy = ref(false);
 
 const loginForm = ref({ username: '', password: '' });
 const registerForm = ref({ username: '', password: '', email: '' });
-
-const extMeta = EXTENSION_META;
-const extDownloadUrl = `/downloads/marksync-extension-${extMeta.version}.zip`;
 
 onMounted(async () => {
   try {

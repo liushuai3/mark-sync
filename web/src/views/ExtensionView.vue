@@ -5,13 +5,9 @@
         <strong>MarkSync 浏览器插件 v{{ extMeta.version }}</strong> — 支持 Chrome / Edge / Firefox
       </n-alert>
       <n-space>
-        <n-button type="primary" size="large" tag="a" :href="extDownloadUrl" download>
+        <n-button type="primary" size="large" tag="a" href="/downloads/marksync-extension-latest.zip" download>
           <template #icon><n-icon><DownloadOutline /></n-icon></template>
-          下载插件 (.zip)
-        </n-button>
-        <n-button size="large" tag="a" href="/downloads/marksync-extension-latest.zip" download>
-          <template #icon><n-icon><DownloadOutline /></n-icon></template>
-          最新版（固定名）
+          下载插件 v{{ extMeta.version }} (.zip)
         </n-button>
       </n-space>
     </n-card>
@@ -93,7 +89,7 @@ import { EXTENSION_META } from '../lib/extension-meta.js';
 const message = useMessage();
 const extMeta = EXTENSION_META;
 const apiUrl = computed(() => `${window.location.origin}/api`);
-const extDownloadUrl = `/downloads/marksync-extension-${extMeta.version}.zip`;
+const extDownloadUrl = '/downloads/marksync-extension-latest.zip';
 
 function openUrl(url) {
   window.open(url, '_blank');

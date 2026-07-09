@@ -2,6 +2,7 @@
 // (Gitee Gist mode was removed in v1.2.0.)
 
 import { MarkSyncBackend, getMarkSyncConfig } from './marksync.js';
+import { BookmarkManager } from './bookmarkManager.js';
 
 async function getClient() {
   const cfg = await getMarkSyncConfig();
@@ -29,7 +30,6 @@ function countUrls(tree) {
  * Upload local bookmarks to the cloud (incremental).
  */
 export async function syncLocalToCloud() {
-  const { BookmarkManager } = await import('./bookmarkManager.js');
   const localBookmarks = await BookmarkManager.getAllBookmarks();
   const client = await getClient();
   const res = await client.push(localBookmarks);
@@ -44,7 +44,6 @@ export async function syncLocalToCloud() {
  * Download cloud bookmarks and merge into local.
  */
 export async function syncCloudToLocal() {
-  const { BookmarkManager } = await import('./bookmarkManager.js');
   const client = await getClient();
   const { tree } = await client.pull();
   await BookmarkManager.saveBookmarksToLocal(tree);
@@ -55,7 +54,6 @@ export async function syncCloudToLocal() {
  * Force upload: overwrite cloud with local.
  */
 export async function forceSyncLocalToCloud() {
-  const { BookmarkManager } = await import('./bookmarkManager.js');
   const localBookmarks = await BookmarkManager.getAllBookmarks();
   const client = await getClient();
   const res = await client.force(localBookmarks);

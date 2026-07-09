@@ -17,7 +17,8 @@ COPY extension/manifest.json /tmp/ext-manifest.json
 RUN node -e "const m=require('/tmp/ext-manifest.json');require('fs').writeFileSync('src/lib/extension-meta.js','export const EXTENSION_META = '+JSON.stringify({name:m.name,version:m.version})+';\n')"
 RUN npm run build
 
-# Extension zip
+# Extension zip - copy extension source first
+COPY extension /app/extension
 RUN cd /app/extension \
   && VERSION=$(node -e "console.log(require('/tmp/ext-manifest.json').version)") \
   && mkdir -p /app/web/dist/downloads \

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "MarkSync 书签同步",
-  "version": "1.2.0",
+  "version": "2.0.0",
   "description": "在不同设备间同步浏览器书签，支持自建后端",
   "permissions": [
     "bookmarks",
