@@ -1,0 +1,153 @@
+<template>
+  <div class="login-container">
+    <n-card class="login-card" :bordered="false">
+      <div class="brand">
+        <n-icon size="48" color="#2196F3">
+          <BookmarkOutline />
+        </n-icon>
+        <h1>MarkSync</h1>
+        <p class="tagline">轻量级书签同步系统</p>
+      </div>
+
+      <n-tabs v-model:value="mode" type="segment" animated>
+        <n-tab-pane name="login" tab="登录">
+          <n-form ref="loginRef" :model="loginForm" @submit.prevent="onLogin">
+            <n-form-item path="username" label="用户名">
+              <n-input v-model:value="loginForm.username" placeholder="用户名" />
+            </n-form-item>
+            <n-form-item path="password" label="密码">
+              <n-input v-model:value="loginForm.password" type="password" show-password-on="click" placeholder="密码" @keydown.enter.prevent="onLogin" />
+            </n-form-item>
+            <n-button type="primary" block :loading="loading" @click="onLogin">登录</n-button>
+          </n-form>
+        </n-tab-pane>
+        <n-tab-pane v-if="canRegister" name="register" tab="注册">
+          <n-form v-if="canRegister" ref="registerRef" :model="registerForm" @submit.prevent="onRegister">
+            <n-form-item path="username" label="用户名">
+              <n-input v-model:value="registerForm.username" placeholder="至少 3 个字符" />
+            </n-form-item>
+            <n-form-item path="email" label="邮箱（可选）">
+              <n-input v-model:value="registerForm.email" placeholder="a@b.com" />
+            </n-form-item>
+            <n-form-item path="password" label="密码">
+              <n-input v-model:value="registerForm.password" type="password" show-password-on="click" placeholder="至少 6 个字符" />
+            </n-form-item>
+            <n-button type="primary" block :loading="loading" @click="onRegister">注册并登录</n-button>
+          </n-form>
+          <n-empty v-else description="注册已关闭" />
+        </n-tab-pane>
+      </n-tabs>
+
+      <div class="footer">
+        <n-space justify="space-between" align="center">
+          <span class="version">v1.0</span>
+          <span :class="['health', healthy ? 'ok' : 'err']">
+            {{ healthy ? '● 服务在线' : '○ 服务离线' }}
+          </span>
+        </n-space>
+      </div>
+    </n-card>
+  </div>
+</template>
+
+<script setup>
+import { ref, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
+import { useMessage } from '../lib/naive-api.js';
+import { BookmarkOutline } from '@vicons/ionicons5';
+import { useAuthStore } from '../stores/auth.js';
+import { authApi } from '../api/index.js';
+import { health } from '../api/client.js';
+
+const router = useRouter();
+const auth = useAuthStore();
+const message = useMessage();
+
+const mode = ref('login');
+const loading = ref(false);
+const canRegister = ref(true);
+const healthy = ref(false);
+
+const loginForm = ref({ username: '', password: '' });
+const registerForm = ref({ username: '', password: '', email: '' });
+
+onMounted(async () => {
+  try {
+    const status = await authApi.status();
+    canRegister.value = status.can_register;
+    if (!status.has_users) mode.value = 'register';
+  } catch {}
+
+  try {
+    await health();
+    healthy.value = true;
+  } catch {
+    healthy.value = false;
+  }
+});
+
+async function onLogin() {
+  if (!loginForm.value.username || !loginForm.value.password) {
+    message.error('请填写用户名和密码');
+    return;
+  }
+  loading.value = true;
+  try {
+    await auth.login(loginForm.value.username, loginForm.value.password);
+    message.success('登录成功');
+    router.replace('/dashboard');
+  } catch (err) {
+    message.error(err.message || '登录失败');
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function onRegister() {
+  if (!registerForm.value.username || !registerForm.value.password) {
+    message.error('请填写用户名和密码');
+    return;
+  }
+  if (registerForm.value.password.length < 6) {
+    message.error('密码至少 6 位');
+    return;
+  }
+  loading.value = true;
+  try {
+    await auth.register(
+      registerForm.value.username,
+      registerForm.value.password,
+      registerForm.value.email
+    );
+    message.success('注册成功');
+    router.replace('/dashboard');
+  } catch (err) {
+    message.error(err.message || '注册失败');
+  } finally {
+    loading.value = false;
+  }
+}
+</script>
+
+<style scoped>
+.login-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 20px;
+}
+.login-card {
+  width: 100%;
+  max-width: 420px;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+.brand { text-align: center; margin-bottom: 24px; }
+.brand h1 { margin: 12px 0 4px; font-size: 28px; }
+.tagline { color: #999; font-size: 14px; margin: 0; }
+.footer { margin-top: 20px; font-size: 12px; color: #999; }
+.health.ok { color: #52c41a; }
+.health.err { color: #f5222d; }
+</style>

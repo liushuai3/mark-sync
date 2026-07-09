@@ -1,0 +1,31 @@
+services:
+  marksync:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: marksync:latest
+    container_name: marksync
+    restart: unless-stopped
+    ports:
+      - "8888:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DB_PATH=/app/backend/data/bookmarks.db
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
+      - REGISTRATION_OPEN=${REGISTRATION_OPEN:-false}
+      - CORS_ORIGINS=${CORS_ORIGINS:-https://bookmark.zcoolq.cn}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    volumes:
+      - ../backend/data:/app/backend/data
+    healthcheck:
+      test: ["CMD-SHELL", "node -e 'fetch(`http://localhost:3000/health`).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))'"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="popup.css">
+  <link rel="stylesheet" href="help.css">
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .help-page {
+      display: block;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="help-page">
+    <div class="help-header">
+      <h1>使用说明</h1>
+      <button class="close-button" id="closeHelp">×</button>
+    </div>
+    <div class="help-content" id="helpContent">
+      <div class="loading">加载中...</div>
+    </div>
+  </div>
+  <script src="help.js" type="module"></script>
+</body>
+</html> 

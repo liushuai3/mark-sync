@@ -1,0 +1,155 @@
+<template>
+  <n-layout has-sider style="height: 100vh">
+    <n-layout-sider
+      :collapsed="collapsed"
+      collapse-mode="width"
+      :collapsed-width="64"
+      :width="220"
+      show-trigger
+      @collapse="collapsed = true"
+      @expand="collapsed = false"
+      bordered
+    >
+      <div class="brand">
+        <n-icon size="24" :color="themeStore.dark ? '#fff' : '#2196F3'"><BookmarkOutline /></n-icon>
+        <span v-if="!collapsed" class="brand-name">MarkSync</span>
+      </div>
+      <n-menu
+        :collapsed="collapsed"
+        :collapsed-width="64"
+        :collapsed-icon-size="22"
+        :options="menuOptions"
+        :value="activeKey"
+        @update:value="onMenuClick"
+      />
+    </n-layout-sider>
+
+    <n-layout>
+      <n-layout-header bordered class="header">
+        <n-space justify="space-between" align="center" style="width: 100%">
+          <div class="page-title">{{ pageTitle }}</div>
+          <n-space align="center">
+            <n-tag :type="healthy ? 'success' : 'error'" size="small">
+              {{ healthy ? '● 后端在线' : '○ 后端离线' }}
+            </n-tag>
+            <n-button size="small" quaternary circle @click="themeStore.toggle()">
+              <template #icon>
+                <n-icon><SunnyOutline v-if="themeStore.dark" /><MoonOutline v-else /></n-icon>
+              </template>
+            </n-button>
+            <n-dropdown :options="userMenu" @select="onUserMenu">
+              <n-button quaternary>
+                <template #icon>
+                  <n-icon><PersonCircleOutline /></n-icon>
+                </template>
+                {{ auth.user?.username || '未登录' }}
+              </n-button>
+            </n-dropdown>
+          </n-space>
+        </n-space>
+      </n-layout-header>
+
+      <n-layout-content class="content">
+        <router-view />
+      </n-layout-content>
+    </n-layout>
+  </n-layout>
+</template>
+
+<script setup>
+import { ref, computed, h, onMounted } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
+import { NIcon } from 'naive-ui';
+import {
+  BookmarkOutline,
+  HomeOutline,
+  KeyOutline,
+  ListOutline,
+  SettingsOutline,
+  MoonOutline,
+  SunnyOutline,
+  PersonCircleOutline,
+  LogOutOutline,
+  BookmarksOutline,
+} from '@vicons/ionicons5';
+import { useAuthStore } from '../stores/auth.js';
+import { useThemeStore } from '../stores/theme.js';
+import { health } from '../api/client.js';
+
+const router = useRouter();
+const route = useRoute();
+const auth = useAuthStore();
+const themeStore = useThemeStore();
+
+const collapsed = ref(false);
+const healthy = ref(false);
+
+const renderIcon = (icon) => () => h(NIcon, null, { default: () => h(icon) });
+
+const menuOptions = [
+  { label: '仪表盘', key: 'dashboard', icon: renderIcon(HomeOutline) },
+  { label: '书签管理', key: 'bookmarks', icon: renderIcon(BookmarksOutline) },
+  { label: 'API Token', key: 'tokens', icon: renderIcon(KeyOutline) },
+  { label: '同步日志', key: 'sync-logs', icon: renderIcon(ListOutline) },
+  { label: '设置', key: 'settings', icon: renderIcon(SettingsOutline) },
+];
+
+const userMenu = [
+  { label: '退出登录', key: 'logout', icon: renderIcon(LogOutOutline) },
+];
+
+const activeKey = computed(() => route.name || 'dashboard');
+const pageTitle = computed(() => {
+  const found = menuOptions.find((m) => m.key === activeKey.value);
+  return found?.label || 'MarkSync';
+});
+
+function onMenuClick(key) {
+  router.push({ name: key });
+}
+
+function onUserMenu(key) {
+  if (key === 'logout') {
+    auth.logout();
+    router.replace('/login');
+  }
+}
+
+onMounted(async () => {
+  try {
+    await health();
+    healthy.value = true;
+  } catch {
+    healthy.value = false;
+  }
+  setInterval(async () => {
+    try {
+      await health();
+      healthy.value = true;
+    } catch {
+      healthy.value = false;
+    }
+  }, 30_000);
+});
+</script>
+
+<style scoped>
+.brand {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--n-border-color);
+  font-weight: 600;
+}
+.brand-name { font-size: 18px; }
+.header {
+  height: 56px;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+}
+.page-title { font-size: 18px; font-weight: 600; }
+.content { padding: 24px; overflow: auto; }
+</style>

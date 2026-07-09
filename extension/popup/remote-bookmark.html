@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="popup.css">
+  <title>远程书签管理</title>
+  <style>
+    .bookmark-list-item {
+      display: flex;
+      align-items: center;
+      padding: 10px;
+      border-bottom: 1px solid #eee;
+      position: relative;
+    }
+    
+    .folder-item {
+      display: flex;
+      align-items: center;
+      padding: 10px;
+      border-bottom: 1px solid #eee;
+      background-color: #f8f9fa;
+      font-weight: 500;
+    }
+    
+    .folder-item .folder-icon {
+      margin-right: 10px;
+      font-size: 16px;
+    }
+    
+    .folder-item .folder-name {
+      flex: 1;
+    }
+    
+    .folder-item .folder-path {
+      font-size: 12px;
+      color: #666;
+      margin-left: 10px;
+    }
+    
+    .folder-item .folder-actions {
+      display: flex;
+      gap: 5px;
+    }
+    
+    .toolbar {
+      display: flex;
+      gap: 15px;
+      margin-bottom: 20px;
+      align-items: center;
+    }
+    
+    .bookmark-details {
+      flex: 1;
+    }
+    
+    .bookmark-actions {
+      display: flex;
+      gap: 5px;
+    }
+    
+    .edit-button {
+  background: #f0f0f0;
+  border: 1px solid #ddd;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  color: #333;
+}
+
+.edit-button:hover {
+  background-color: #e0e0e0;
+  border-color: #ccc;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.1);
+}
+
+.delete-button {
+  background: #f44336;
+  border: 1px solid #d32f2f;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  color: white;
+}
+
+.delete-button:hover {
+  background-color: #d32f2f;
+  border-color: #b22a2a;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.1);
+}
+    
+    /* 编辑表单样式 */
+    .edit-form {
+      padding: 15px 0;
+    }
+    
+    .form-group {
+      margin-bottom: 15px;
+    }
+    
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 500;
+      color: #333;
+    }
+    
+    .form-group input {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    
+    .form-group input:focus {
+      border-color: #4285f4;
+      outline: none;
+    }
+    
+    .form-group input:disabled {
+      background-color: #f5f5f5;
+      color: #666;
+    }
+    
+    .save-button {
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    
+    .save-button:hover {
+      background-color: #45a049;
+    }
+    
+    /* 对话框样式 */
+    .dialog {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+    }
+    
+    .dialog.show {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    
+    .dialog-content {
+      background-color: white;
+      border-radius: 8px;
+      width: 90%;
+      max-width: 500px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+    
+    .dialog-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px;
+      border-bottom: 1px solid #eee;
+    }
+    
+    .dialog-header h3 {
+      margin: 0;
+      font-size: 18px;
+    }
+    
+    /* 状态消息样式 */
+    .status-message {
+      display: none;
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 10px 20px;
+      background-color: #333;
+      color: white;
+      border-radius: 4px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      z-index: 1001;
+      text-align: center;
+      max-width: 80%;
+    }
+    .search-box {
+      flex: 1;
+      display: flex;
+      position: relative;
+    }
+    #searchInput {
+      flex: 1;
+      padding: 10px 15px;
+      padding-right: 40px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+      transition: border-color 0.2s;
+    }
+    #searchInput:focus {
+      border-color: #4285f4;
+      outline: none;
+    }
+    #searchButton {
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      cursor: pointer;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #searchButton:hover {
+      background-color: #f0f0f0;
+    }
+    .filter-dropdown select {
+      padding: 10px 30px 10px 15px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      background-color: white;
+      font-size: 14px;
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      background-size: 16px;
+    }
+    .filter-dropdown select:focus {
+      border-color: #4285f4;
+      outline: none;
+    }
+    
+    .bookmark-stats {
+      display: flex;
+      justify-content: space-between;
+      margin: 15px 0;
+      font-size: 14px;
+      color: #666;
+      padding: 10px;
+      background-color: #f8f9fa;
+      border-radius: 8px;
+    }
+    
+    #totalBookmarks, #currentRange {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      background-color: white;
+      border: 1px solid #eee;
+      font-weight: 500;
+    }
+    
+    .pagination {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin: 20px 0;
+      gap: 15px;
+      padding: 10px 0;
+      border-top: 1px solid #f0f0f0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    
+    .page-button {
+      padding: 8px 15px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      background-color: white;
+      color: #333;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 14px;
+    }
+    
+    .page-button:hover:not(:disabled) {
+      background-color: #f0f0f0;
+      border-color: #bbb;
+      transform: translateY(-1px);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    
+    .page-button:active:not(:disabled) {
+      transform: translateY(0);
+      box-shadow: none;
+    }
+    
+    .page-button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      background-color: #f5f5f5;
+    }
+    
+    #pageInfo {
+      font-size: 14px;
+      color: #333;
+      font-weight: 500;
+      background-color: #f8f9fa;
+      padding: 6px 12px;
+      border-radius: 4px;
+      min-width: 120px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="container remote-container">
+    <div class="header">
+      <h2>远程书签管理</h2>
+      <div class="header-buttons">
+        <button id="backButton" class="icon-button" title="返回">←</button>
+        <button id="refreshButton" class="icon-button" title="刷新">🔄</button>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <div class="search-box">
+        <input type="text" id="searchInput" placeholder="搜索书签标题、URL或路径...">
+        <button id="searchButton" class="icon-button">🔍</button>
+      </div>
+      <div class="filter-dropdown">
+        <select id="pathFilter">
+          <option value="all">所有路径</option>
+          <!-- 路径选项将通过JS动态填充 -->
+        </select>
+      </div>
+    </div>
+
+    <div id="remoteBookmarkList" class="bookmark-list"></div>
+    <div id="remoteBookmarkEmpty" class="empty-state">
+      暂无远程书签数据
+    </div>
+    
+    <!-- 编辑文件夹对话框 -->
+    <div id="editFolderDialog" class="dialog">
+      <div class="dialog-content">
+        <div class="dialog-header">
+          <button id="closeEditFolderDialog" class="back-button">取消</button>
+          <h3>编辑文件夹</h3>
+          <button id="saveFolder" class="save-button">保存</button>
+        </div>
+        <div class="edit-form">
+          <div class="form-group">
+            <label for="editFolderName">文件夹名称</label>
+            <input type="text" id="editFolderName" placeholder="文件夹名称">
+          </div>
+          <div class="form-group">
+            <label for="editFolderPath">路径</label>
+            <input type="text" id="editFolderPath" disabled>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="bookmark-stats">
+      <span id="totalBookmarks">总计: 0 个书签</span>
+      <span id="currentRange">当前显示: 0-0</span>
+    </div>
+
+    <div class="pagination">
+      <button id="prevPage" class="page-button" disabled>上一页</button>
+      <span id="pageInfo">第 1 页 / 共 1 页</span>
+      <button id="nextPage" class="page-button" disabled>下一页</button>
+    </div>
+
+    <div class="action-buttons">
+      <button id="deleteSelected" class="warning-button">删除选中</button>
+    </div>
+    
+    <!-- 编辑书签对话框 -->
+    <div id="editBookmarkDialog" class="dialog">
+      <div class="dialog-content">
+        <div class="dialog-header">
+          <button id="closeEditDialog" class="back-button">取消</button>
+          <h3>编辑书签</h3>
+          <button id="saveBookmark" class="save-button">保存</button>
+        </div>
+        <div class="edit-form">
+          <div class="form-group">
+            <label for="editBookmarkTitle">标题</label>
+            <input type="text" id="editBookmarkTitle" placeholder="书签标题">
+          </div>
+          <div class="form-group">
+            <label for="editBookmarkUrl">URL</label>
+            <input type="text" id="editBookmarkUrl" placeholder="https://example.com">
+          </div>
+          <div class="form-group">
+            <label for="editBookmarkPath">路径</label>
+            <input type="text" id="editBookmarkPath" disabled>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="status" class="status-message"></div>
+  </div>
+
+  <script type="module" src="remote-bookmark.js"></script>
+</body>
+</html>

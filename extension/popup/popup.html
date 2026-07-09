@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h2>书签同步助手</h2>
+      <div class="header-buttons">
+        <button id="remoteBookmarkButton" class="icon-button" title="远程书签管理">🔍</button>
+        <button id="helpButton" class="icon-button" title="使用说明">❔</button>
+        <button id="settingsButton" class="icon-button" title="设置">⚙️</button>
+      </div>
+    </div>
+    <div class="button-group">
+      <button id="uploadBookmarks">本地同步到云端</button>
+      <button id="downloadBookmarks">云端同步到本地</button>
+      <button id="forceUpload" class="warning-button">强制本地同步到云端</button>
+      <button id="clearLocal">清除本地书签</button>
+    </div>
+    <div id="status"></div>
+    
+
+    
+  </div>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

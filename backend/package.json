@@ -1,0 +1,32 @@
+{
+  "name": "marksync-backend",
+  "version": "1.0.0",
+  "description": "MarkSync backend API",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "node --loader tsx scripts/test.mjs"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.7",
+    "@node-rs/argon2": "^2.0.2",
+    "better-sqlite3": "^11.7.0",
+    "dotenv": "^16.4.7",
+    "hono": "^4.6.14",
+    "jose": "^5.9.6",
+    "uuid": "^11.0.3",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

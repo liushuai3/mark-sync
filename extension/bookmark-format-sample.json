@@ -1,0 +1,76 @@
+{
+  "version": "2.0",
+  "lastSync": "2023-07-30T10:15:00Z",
+  "roots": {
+    "bookmark_bar": {
+      "id": "root_0",
+      "name": "书签栏",
+      "type": "folder",
+      "children": [
+        {
+          "id": "folder_1",
+          "name": "工作资源",
+          "type": "folder",
+          "children": [
+            {
+              "id": "bm_1",
+              "name": "项目管理系统",
+              "type": "url",
+              "url": "https://www.projectmanagement.com",
+              "dateAdded": 1690701300000,
+              "dateModified": 1690701350000
+            },
+            {
+              "id": "bm_2",
+              "name": "内部文档",
+              "type": "url",
+              "url": "https://www.internaldocs.com",
+              "dateAdded": 1690701400000
+            }
+          ],
+          "dateAdded": 1690701200000,
+          "dateModified": 1690701250000
+        },
+        {
+          "id": "bm_3",
+          "name": "常用工具",
+          "type": "url",
+          "url": "https://www.tools.com",
+          "dateAdded": 1690701500000
+        }
+      ],
+      "dateAdded": 1690701000000
+    },
+    "other": {
+      "id": "root_1",
+      "name": "其他书签",
+      "type": "folder",
+      "children": [
+        {
+          "id": "folder_2",
+          "name": "个人收藏",
+          "type": "folder",
+          "children": [
+            {
+              "id": "bm_4",
+              "name": "技术博客",
+              "type": "url",
+              "url": "https://www.techblog.com",
+              "dateAdded": 1690701600000
+            }
+          ]
+        }
+      ]
+    },
+    "mobile": {
+      "id": "root_2",
+      "name": "移动书签",
+      "type": "folder",
+      "children": []
+    }
+  },
+  "meta": {
+    "generator": "BookmarkSync v2.0",
+    "checksum": "a1b2c3d4e5f6"
+  }
+}

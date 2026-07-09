@@ -1,0 +1,425 @@
+.container {
+  width: 300px;
+  padding: 15px;
+}
+
+.remote-container {
+  width: 800px;
+  max-width: 90vw;
+  margin: 20px auto;
+  padding: 20px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  border-radius: 12px;
+  background-color: white;
+}
+
+.remote-container .header {
+  padding-bottom: 15px;
+  border-bottom: 1px solid #f0f0f0;
+  margin-bottom: 20px;
+}
+
+.remote-container #status {
+  margin-top: 15px;
+  padding: 10px 15px;
+  border-radius: 8px;
+  background-color: #f8f9fa;
+  color: #5f6368;
+  text-align: center;
+}
+
+.remote-container .empty-state {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+  color: #666;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  margin: 20px 0;
+}
+
+/* 同步记录项样式 */
+.remote-container .record-item {
+    padding: 12px 15px;
+    border-bottom: 1px solid #eee;
+    transition: background-color 0.2s;
+}
+
+.remote-container .record-item:hover {
+    background-color: #f5f5f5;
+    border-radius: 8px;
+}
+
+.remote-container .record-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+.remote-container .record-date {
+    font-weight: 500;
+    color: #333;
+}
+
+.remote-container .record-status {
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.remote-container .record-status.success {
+    background-color: #e6f7ee;
+    color: #00875a;
+}
+
+.remote-container .record-status.failed {
+    background-color: #ffebe9;
+    color: #e53e3e;
+}
+
+.remote-container .record-details {
+    font-size: 13px;
+    color: #666;
+}
+
+.remote-container .record-operation {
+    margin-bottom: 3px;
+}
+
+.remote-container .record-message {
+    margin-top: 5px;
+    padding: 8px;
+    background-color: #f5f5f5;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #555;
+}
+
+.button-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+button {
+  padding: 8px 16px;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+button:hover {
+  background-color: #45a049;
+}
+
+#status {
+  margin-top: 10px;
+  padding: 10px;
+  text-align: center;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.header h2 {
+  margin: 0;
+}
+
+.header-buttons {
+  display: flex;
+  gap: 5px;
+}
+
+.icon-button {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 5px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.icon-button:hover {
+  background-color: #f0f0f0;
+}
+
+
+
+.toolbar {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 20px;
+  align-items: center;
+}
+
+
+
+/* 使用说明页面样式 */
+.help-page {
+  position: relative;
+  background: white;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.help-content {
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.help-content h1 {
+  font-size: 24px;
+  margin-bottom: 20px;
+}
+
+.help-content h2 {
+  font-size: 20px;
+  margin: 20px 0 10px;
+  color: #333;
+}
+
+.help-content h3 {
+  font-size: 16px;
+  margin: 15px 0 10px;
+  color: #444;
+}
+
+.help-content p {
+  margin: 10px 0;
+}
+
+.help-content ul,
+.help-content ol {
+  padding-left: 25px;
+  margin: 10px 0;
+}
+
+.help-content li {
+  margin: 5px 0;
+}
+
+.help-page.show {
+  display: block;
+}
+
+.help-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 5px;
+}
+
+.close-button:hover {
+  color: #666;
+}
+
+.warning-button {
+  background-color: #ff9800;
+}
+
+.warning-button:hover {
+  background-color: #f57c00;
+}
+
+.dialog {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.dialog.show {
+  display: block;
+}
+
+.dialog-content {
+  background: white;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #eee;
+}
+
+.dialog-header h3 {
+  margin: 0;
+  flex: 1;
+  text-align: center;
+}
+
+.back-button {
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  padding: 8px;
+  font-size: 14px;
+}
+
+.back-button:hover {
+  color: #333;
+  background-color: #f0f0f0;
+  border-radius: 4px;
+}
+
+/* 远程书签管理样式 */
+.remote-bookmark-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-bottom: 15px;
+  padding: 5px;
+}
+
+.bookmark-list {
+  margin-top: 10px;
+}
+
+.bookmark-list-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 15px;
+  border-bottom: 1px solid #f0f0f0;
+  transition: background-color 0.2s;
+}
+
+.bookmark-list-item:last-child {
+  border-bottom: none;
+}
+
+.bookmark-list-item:hover {
+  background-color: #f8f9fa;
+  border-radius: 8px;
+}
+
+.bookmark-checkbox {
+  margin-right: 12px;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+}
+
+.bookmark-title {
+  font-weight: 500;
+  margin-bottom: 4px;
+  color: #202124;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bookmark-url {
+  font-size: 12px;
+  color: #1a73e8;
+  word-break: break-all;
+  margin-bottom: 2px;
+  line-height: 1.4;
+}
+
+.bookmark-path {
+  font-size: 11px;
+  color: #5f6368;
+  background-color: #f1f3f4;
+  padding: 2px 6px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.bookmark-details {
+  flex: 1;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 20px;
+  color: #666;
+}
+
+
+
+/* 加载动画 */
+@keyframes spin {
+  0% { transform: translateY(-50%) rotate(0deg); }
+  100% { transform: translateY(-50%) rotate(360deg); }
+}
+
+.loading {
+  position: relative;
+  pointer-events: none;  /* 禁止点击 */
+  opacity: 0.8;
+  transition: opacity 0.3s ease;
+}
+
+.loading::after {
+  content: '';
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  animation: spin 0.8s ease-in-out infinite;
+}
+
+/* 禁用状态 */
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transition: opacity 0.3s ease;
+}
+
+/* 按钮悬停和点击效果 */
+button {
+  transition: all 0.2s ease;
+}
+
+button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
+}

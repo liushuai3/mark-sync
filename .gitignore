@@ -1,0 +1,14 @@
+node_modules/
+dist/
+data/
+*.db
+*.db-shm
+*.db-wal
+*.log
+.env
+!.env.example
+.DS_Store
+.vercel/
+jwt.secret
+backups/
+.vite/
