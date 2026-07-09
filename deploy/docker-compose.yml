@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
     image: marksync:latest
     container_name: marksync
-    restart: unless-stopped
+    restart: always
     ports:
       - "8888:3000"
     environment:

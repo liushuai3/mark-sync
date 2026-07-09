@@ -1,13 +1,15 @@
-node_modules/
+# .dockerignore - 完整构建版本
 .git/
-*.md
+*.log
+.env
+.DS_Store
 deploy/
 docs/
 extension/docs/
-.gitignore
-.env
-*.log
-Dockerfile*
+extension/CLAUDE.md
+extension/TESTING.md
 nginx.conf
-.vite/
-test/
+
+# 不要复制本机的 node_modules 和 dist（在容器内构建）
+**/node_modules/
+**/dist/
