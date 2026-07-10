@@ -5,6 +5,7 @@ import { hashPassword, verifyPassword, signJwt } from '../lib/auth.js';
 import { config } from '../config.js';
 import { requireJwt, requireAuth, type AuthContext } from '../middleware/auth.js';
 import { rateLimit } from '../middleware/rate-limit.js';
+import { checkLoginThrottle, recordFailedLogin, recordSuccessfulLogin } from '../middleware/login-protection.js';
 
 const app = new Hono();
 
@@ -35,7 +36,7 @@ const getDbSetting = db.prepare<[string], { value: string }>(
   'SELECT value FROM settings WHERE key = ? LIMIT 1'
 );
 
-app.post('/register', rateLimit('register', 5, 60_000), async (c) => {
+app.post('/register', rateLimit('register', 3, 600_000), async (c) => {
   const parsed = registerSchema.safeParse(await c.req.json().catch(() => ({})));
   if (!parsed.success) {
     return c.json({ ok: false, error: parsed.error.issues[0].message, code: 'INVALID_INPUT' }, 400);
@@ -73,20 +74,38 @@ app.post('/register', rateLimit('register', 5, 60_000), async (c) => {
   });
 });
 
-app.post('/login', rateLimit('login', 5, 60_000), async (c) => {
+app.post('/login', rateLimit('login', 3, 60_000), async (c) => {
   const parsed = loginSchema.safeParse(await c.req.json().catch(() => ({})));
   if (!parsed.success) {
     return c.json({ ok: false, error: parsed.error.issues[0].message, code: 'INVALID_INPUT' }, 400);
   }
   const { username, password } = parsed.data;
+
+  // Extract IP for throttle check
+  const ip =
+    c.req.header('x-forwarded-for')?.split(',')[0].trim() ||
+    c.req.header('x-real-ip') ||
+    c.req.header('CF-Connecting-IP') ||
+    'unknown';
+
+  // Check brute-force protection
+  const throttle = checkLoginThrottle(username, ip);
+  if (throttle.blocked) {
+    return c.json({ ok: false, error: throttle.reason, code: 'ACCOUNT_LOCKED' }, 429);
+  }
+
   const user = getUserByUsername.get(username);
   if (!user) {
+    // Still record to prevent username enumeration timing attacks
+    recordFailedLogin(username, ip);
     return c.json({ ok: false, error: 'Invalid credentials', code: 'UNAUTHORIZED' }, 401);
   }
   const ok = await verifyPassword(user.password_hash, password);
   if (!ok) {
+    recordFailedLogin(username, ip);
     return c.json({ ok: false, error: 'Invalid credentials', code: 'UNAUTHORIZED' }, 401);
   }
+  recordSuccessfulLogin(username, ip);
   const token = await signJwt(user.id);
   return c.json({
     ok: true,

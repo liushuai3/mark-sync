@@ -43,9 +43,11 @@
         </n-form-item>
         <n-form-item label="下次自动备份">
           <span>{{ config.next_run_at && config.enabled ? formatDate(config.next_run_at) : '—' }}</span>
+          <span class="hint">（服务器时区 UTC+8）</span>
         </n-form-item>
         <n-form-item label="上次自动备份">
           <span>{{ config.last_run_at ? formatDate(config.last_run_at) : '—' }}</span>
+          <span class="hint">（服务器时区 UTC+8）</span>
         </n-form-item>
         <n-space>
           <n-button type="primary" :loading="saving" @click="onSaveConfig">保存配置</n-button>
@@ -297,7 +299,19 @@ function onUploadRestore() {
 }
 
 function formatDate(ts) {
-  return new Date(ts).toLocaleString('zh-CN', { hour12: false });
+  if (!ts) return '—';
+  const d = new Date(ts);
+  // Force Asia/Shanghai timezone regardless of browser locale
+  return d.toLocaleString('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
 }
 
 function formatSize(bytes) {

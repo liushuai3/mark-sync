@@ -11,6 +11,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
+      - TZ=Asia/Shanghai
       - DB_PATH=/app/backend/data/bookmarks.db
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
       - REGISTRATION_OPEN=${REGISTRATION_OPEN:-false}

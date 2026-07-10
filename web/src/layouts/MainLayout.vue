@@ -74,6 +74,7 @@ import {
   CloudUploadOutline,
   PeopleOutline,
   ExtensionPuzzleOutline,
+  ShieldCheckmarkOutline,
 } from '@vicons/ionicons5';
 import { useAuthStore } from '../stores/auth.js';
 import { useThemeStore } from '../stores/theme.js';
@@ -98,6 +99,7 @@ const menuOptions = [
   { label: 'API Token', key: 'tokens', icon: renderIcon(KeyOutline) },
   { label: '同步日志', key: 'sync-logs', icon: renderIcon(ListOutline) },
   { label: '设置', key: 'settings', icon: renderIcon(SettingsOutline) },
+  { label: '安全中心', key: 'security', icon: renderIcon(ShieldCheckmarkOutline), show: () => auth.user?.is_admin },
 ];
 
 const userMenu = [

@@ -14,6 +14,8 @@ export const config = {
   logLevel: process.env.LOG_LEVEL || 'info',
   jwtSecretPath: './data/jwt.secret',
   backupDir: process.env.BACKUP_DIR || './data/backups',
+  // Security settings
+  maxRequestBodySize: Number(process.env.MAX_REQUEST_BODY_SIZE || 1048576), // 1MB default
 };
 
 export const isProd = config.nodeEnv === 'production';

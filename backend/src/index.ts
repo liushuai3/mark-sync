@@ -5,6 +5,9 @@ import { cors } from 'hono/cors';
 import { config, isProd } from './config.js';
 import { logger } from './lib/logger.js';
 import { errorHandler } from './middleware/error.js';
+import { securityHeaders } from './middleware/security-headers.js';
+import { bodySizeLimit } from './middleware/body-size-limit.js';
+import { csrfProtection } from './middleware/csrf.js';
 import auth, { ensureAdminUser } from './routes/auth.js';
 import tokens from './routes/tokens.js';
 import sync from './routes/sync.js';
@@ -13,10 +16,21 @@ import stats from './routes/stats.js';
 import backups from './routes/backups.js';
 import settings from './routes/settings.js';
 import users from './routes/users.js';
+import security from './routes/security.js';
 import { startBackupScheduler } from './lib/backup.js';
 import { existsSync } from 'node:fs';
 
 const app = new Hono();
+
+// Security headers on all responses
+app.use('*', securityHeaders());
+
+// Request body size limit (1MB for API, 10MB for sync)
+app.use('/api/*', bodySizeLimit(1024 * 1024)); // 1MB general API
+app.use('/api/sync/*', bodySizeLimit(10 * 1024 * 1024)); // 10MB for sync
+
+// CSRF protection for non-safe methods
+app.use('*', csrfProtection());
 
 // CORS - allow configured origins + any chrome-extension://
 app.use(
@@ -69,6 +83,7 @@ app.route('/api/bookmarks', bookmarks);
 app.route('/api/backups', backups);
 app.route('/api/settings', settings);
 app.route('/api/users', users);
+app.route('/api/security', security);
 app.route('/api', stats);
 
 // Error handler

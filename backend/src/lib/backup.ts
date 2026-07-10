@@ -183,6 +183,7 @@ export function updateBackupConfig(userId: number, input: UpdateConfigInput): Ba
   const keepCount = Math.max(1, Math.min(100, input.keep_count ?? current.keep_count));
   const ts = now();
   const nextRun = enabled ? computeNextRun(ts, intervalHours, hourOfDay) : null;
+  logger.info(`[backup] next_run computed: interval=${intervalHours}h, anchor=${hourOfDay}:00, next=${new Date(nextRun || 0).toISOString()}, now=${new Date(ts).toISOString()}`);
   upsertConfigStmt.run(
     userId,
     enabled ? 1 : 0,
@@ -197,15 +198,22 @@ export function updateBackupConfig(userId: number, input: UpdateConfigInput): Ba
 }
 
 function computeNextRun(fromMs: number, intervalHours: number, hourOfDay: number): number {
-  const d = new Date(fromMs);
-  d.setSeconds(0, 0);
-  d.setMinutes(0);
-  d.setHours(hourOfDay);
-  // If the anchor is in the past, roll forward by intervalHours until in the future.
-  while (d.getTime() <= fromMs) {
-    d.setTime(d.getTime() + intervalHours * 3600_000);
+  // Compute next scheduled backup based on interval and anchor hour.
+  // If interval is 24h, it's "daily at hourOfDay".
+  // If interval is other (e.g. 12h), it rolls every intervalHours starting from hourOfDay.
+  const now = new Date(fromMs);
+  
+  // Build candidate: today at hourOfDay, same minute/second zeroed
+  const candidate = new Date(now);
+  candidate.setHours(hourOfDay, 0, 0, 0);
+  
+  // If candidate is in the past (or now), advance by intervalHours
+  // Keep advancing until we're in the future
+  let next = candidate.getTime();
+  while (next <= fromMs) {
+    next += intervalHours * 3600_000;
   }
-  return d.getTime();
+  return next;
 }
 
 export function pruneOldBackups(userId: number, keepCount: number): number {

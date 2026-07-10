@@ -42,9 +42,12 @@ COPY --from=builder /app/backend/node_modules ./node_modules
 COPY --from=builder /app/backend/package.json ./
 COPY --from=builder /app/web/dist /app/web/dist
 
+# Set timezone to Asia/Shanghai
+RUN ln -snf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && echo Asia/Shanghai > /etc/timezone
+
 RUN mkdir -p data && chown -R node:node /app
 USER node
-ENV NODE_ENV=production PORT=3000
+ENV NODE_ENV=production PORT=3000 TZ=Asia/Shanghai
 EXPOSE 3000
 VOLUME ["/app/backend/data"]
 CMD ["node", "dist/index.js"]

@@ -16,6 +16,7 @@ const routes = [
       { path: 'extension', name: 'extension', component: () => import('./views/ExtensionView.vue') },
       { path: 'users', name: 'users', component: () => import('./views/UsersView.vue') },
       { path: 'settings', name: 'settings', component: () => import('./views/SettingsView.vue') },
+      { path: 'security', name: 'security', component: () => import('./views/SecurityView.vue'), meta: { admin: true } },
     ],
   },
   { path: '/:pathMatch(.*)*', redirect: '/' },

@@ -7,6 +7,7 @@ function getClientKey(c: Context, scope: string): string {
   const ip =
     c.req.header('x-forwarded-for')?.split(',')[0].trim() ||
     c.req.header('x-real-ip') ||
+    c.req.header('CF-Connecting-IP') ||
     'unknown';
   return `${scope}:${ip}`;
 }
@@ -22,6 +23,7 @@ export function rateLimit(scope: string, limit: number, windowMs: number) {
       return;
     }
     if (b.count >= limit) {
+      c.header('Retry-After', String(Math.ceil((b.resetAt - now) / 1000)));
       return c.json(
         { ok: false, error: 'Too many requests', code: 'RATE_LIMITED' },
         429
