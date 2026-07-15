@@ -1,84 +1,344 @@
-import { syncLocalToCloud } from '../utils/syncService.js';
+// MarkSync v3.0 background service worker
+//
+// Responsibilities (SRS §6.2 / FR-2 / FR-3 / FR-11):
+//   1. Schedule bidirectional sync every 5 minutes via chrome.alarms
+//      (±30 s jitter, no local bookmark event listeners).
+//   2. Route popup messages (SYNC_NOW / FORCE_UPLOAD / INITIAL_MERGE /
+//      GET_STATE).
+//   3. Drive the toolbar badge for user-visible sync status.
+//
+// v2 legacy that was removed here on purpose:
+//   - chrome.bookmarks.onCreated / onChanged / onMoved / onRemoved
+//     listeners with a 3 s debounce (SRS §9.2 forbids these; the cloud
+//     is now the source of truth and reconciliation runs on a timer).
+//   - The recursive setTimeout(periodicSync, 30 min) loop.
 
-// Auto sync config
-const AUTO_SYNC_INTERVAL = 30 * 60 * 1000; // 30 min
-const MIN_SYNC_INTERVAL = 5 * 60 * 1000; // 5 min minimum between syncs
-const DEBOUNCE_MS = 3000; // 3s debounce after last event
+import * as IdMapStore from '../utils/idMapStore.js';
+import * as SyncState from '../utils/syncState.js';
+import { initialMerge } from '../utils/initialMerge.js';
+import { syncCycle } from '../utils/syncCycle.js';
+import {
+  flattenLocalTree,
+  getBookmarkTree,
+  callApi,
+} from '../utils/bookmarkHelpers.js';
+import { uuid } from '../utils/uuid.js';
 
-let syncTimeout = null;
-let lastSyncTime = 0;
+// ─── Constants ─────────────────────────────────────────────────────────
+const ALARM_NAME = 'marksync-sync';
+const PERIOD_MINUTES = 5; // FR-2.1
+const JITTER_MS = 30_000; // FR-2.3  (±30 s)
+const BADGE_CLEAR_MS = 2500; // FR-11.2
 
-const getBrowser = () => {
-  if (typeof chrome !== 'undefined') {
-    if (typeof browser !== 'undefined') return 'firefox';
-    return 'chrome';
-  }
-  return 'other';
-};
-
-const browserAPI = getBrowser() === 'firefox' ? browser : chrome;
-
-browserAPI.bookmarks.onCreated.addListener(handleBookmarkChange);
-browserAPI.bookmarks.onChanged.addListener(handleBookmarkChange);
-browserAPI.bookmarks.onMoved.addListener(handleBookmarkChange);
-browserAPI.bookmarks.onRemoved.addListener(handleBookmarkChange);
-
-async function handleBookmarkChange() {
-  try {
-    if (syncTimeout) clearTimeout(syncTimeout);
-
-    const { autoSync } = await browserAPI.storage.sync.get({ autoSync: false });
-    if (!autoSync) return;
-
-    const now = Date.now();
-    if (now - lastSyncTime < MIN_SYNC_INTERVAL) return;
-
-    syncTimeout = setTimeout(async () => {
-      try {
-        const result = await syncLocalToCloud();
-        lastSyncTime = Date.now();
-
-        if (result.added > 0) {
-          try {
-            await browserAPI.notifications.create({
-              type: 'basic',
-              iconUrl: browserAPI.runtime.getURL('icons/icon128.png'),
-              title: 'MarkSync 书签同步',
-              message: `自动同步完成，新增 ${result.added} 个书签`,
-            });
-          } catch (err) {
-            console.log('通知显示失败:', err);
-          }
-        }
-      } catch (error) {
-        console.error('自动同步执行失败:', error);
+// ─── Config ────────────────────────────────────────────────────────────
+// Keys are the v2 keys used by popup/options.js (`marksync_api_url`,
+// `marksync_token`) in chrome.storage.sync — do NOT invent new keys.
+async function getConfig() {
+  return new Promise((resolve) => {
+    chrome.storage.sync.get(
+      ['marksync_api_url', 'marksync_token'],
+      (state) => {
+        resolve({
+          apiUrl: (state && state.marksync_api_url) || '',
+          token: (state && state.marksync_token) || '',
+        });
       }
-    }, DEBOUNCE_MS);
-  } catch (error) {
-    console.error('处理书签变化失败:', error);
-  }
+    );
+  });
 }
 
-async function periodicSync() {
+// ─── Badge helper (FR-11) ──────────────────────────────────────────────
+let badgeClearTimer = null;
+
+function clearBadgeNow() {
   try {
-    const { autoSync } = await browserAPI.storage.sync.get({ autoSync: false });
-    if (autoSync) await handleBookmarkChange();
-  } catch (error) {
-    console.error('定期同步检查失败:', error);
-  } finally {
-    setTimeout(periodicSync, AUTO_SYNC_INTERVAL);
+    chrome.action.setBadgeText({ text: '' });
+  } catch (err) {
+    /* action API not available in some hosts */
   }
 }
-periodicSync();
 
-browserAPI.runtime.onInstalled.addListener((details) => {
-  if (details.reason === 'install') console.log('MarkSync 已安装');
-  else if (details.reason === 'update') console.log('MarkSync 已更新');
+function scheduleBadgeClear() {
+  if (badgeClearTimer) clearTimeout(badgeClearTimer);
+  badgeClearTimer = setTimeout(() => {
+    badgeClearTimer = null;
+    clearBadgeNow();
+  }, BADGE_CLEAR_MS);
+}
+
+/**
+ * @param {'syncing'|'success'|'no-op'|'error'} kind
+ * @param {number} [count]  Only meaningful for `success`.
+ */
+function setBadge(kind, count) {
+  if (badgeClearTimer) {
+    clearTimeout(badgeClearTimer);
+    badgeClearTimer = null;
+  }
+  try {
+    switch (kind) {
+      case 'syncing':
+        chrome.action.setBadgeBackgroundColor({ color: '#2196F3' });
+        chrome.action.setBadgeText({ text: '⋯' });
+        break;
+      case 'success':
+        if (!count || count <= 0) {
+          clearBadgeNow();
+          return;
+        }
+        chrome.action.setBadgeBackgroundColor({ color: '#FF9800' });
+        chrome.action.setBadgeText({ text: '✓' });
+        scheduleBadgeClear();
+        break;
+      case 'no-op':
+        // FR-11.3 — do not flash when nothing changed.
+        clearBadgeNow();
+        break;
+      case 'error':
+        chrome.action.setBadgeBackgroundColor({ color: '#F44336' });
+        chrome.action.setBadgeText({ text: '!' });
+        scheduleBadgeClear();
+        break;
+      default:
+        clearBadgeNow();
+    }
+  } catch (err) {
+    console.warn('[MarkSync/background] badge update failed', err);
+  }
+}
+
+// ─── syncCycle wrapper ────────────────────────────────────────────────
+async function runSyncCycle({ manual = false } = {}) {
+  const { apiUrl, token } = await getConfig();
+  if (!apiUrl || !token) {
+    console.log('[MarkSync/background] no config; sync skipped');
+    return { ok: false, skipped: true, reason: 'no_config' };
+  }
+
+  setBadge('syncing');
+  try {
+    const res = await syncCycle({ apiUrl, token, manual });
+    if (!res || !res.ok) {
+      if (res && res.skipped) {
+        setBadge('no-op');
+      } else {
+        setBadge('error');
+      }
+      return res;
+    }
+    const changed =
+      (res.added || 0) +
+      (res.modified || 0) +
+      (res.removed || 0) +
+      (res.remoteApplied || 0);
+    if (changed > 0) setBadge('success', changed);
+    else setBadge('no-op');
+    return res;
+  } catch (err) {
+    console.error('[MarkSync/background] runSyncCycle failed', err);
+    setBadge('error');
+    return { ok: false, error: String((err && err.message) || err) };
+  }
+}
+
+async function scheduledRun() {
+  // FR-2.3 — ±30 s jitter around the alarm tick.
+  const jitter = Math.random() * (2 * JITTER_MS) - JITTER_MS;
+  const delay = Math.max(0, jitter);
+  setTimeout(() => {
+    runSyncCycle({ manual: false }).catch((err) => {
+      console.error('[MarkSync/background] scheduledRun error', err);
+    });
+  }, delay);
+}
+
+// ─── forceUpload (SRS §6.3) ───────────────────────────────────────────
+async function forceUpload() {
+  const { apiUrl, token } = await getConfig();
+  if (!apiUrl || !token) {
+    return { ok: false, error: 'not configured' };
+  }
+
+  setBadge('syncing');
+  try {
+    // 1. Flatten the current local tree (folders + urls).
+    const tree = await getBookmarkTree();
+    const localNodes = flattenLocalTree(tree);
+
+    // 2. Give every node an id. Reuse existing cloud_id from the idMap
+    //    when we already know it, otherwise mint a fresh uuid so the
+    //    server sees stable identifiers.
+    const chromeIdToNewId = new Map();
+    for (const n of localNodes) {
+      const existing = await IdMapStore.getByChromeId(n.chrome_id);
+      const id = (existing && existing.cloud_id) || uuid();
+      chromeIdToNewId.set(n.chrome_id, id);
+    }
+
+    // 3. Build POST /sync/force payload.
+    const bookmarks = localNodes.map((n) => ({
+      id: chromeIdToNewId.get(n.chrome_id),
+      type: n.type,
+      parent_id: n.parent_chrome_id
+        ? chromeIdToNewId.get(n.parent_chrome_id) || null
+        : null,
+      root: n.root,
+      name: n.name,
+      url: n.url,
+      position: n.position,
+      date_added: n.date_added,
+      date_modified: n.date_modified,
+    }));
+
+    const data = await callApi(apiUrl, token, '/sync/force', {
+      method: 'POST',
+      body: { bookmarks },
+    });
+    const serverTime = Number(data && data.server_time) || Date.now();
+
+    // 4. Rebuild the idMap from the freshly-uploaded state.
+    await IdMapStore.clear();
+    for (const n of localNodes) {
+      const id = chromeIdToNewId.get(n.chrome_id);
+      await IdMapStore.set(id, {
+        chrome_id: n.chrome_id,
+        type: n.type,
+        root: n.root,
+        name: n.name,
+        url: n.url,
+        parent_id: n.parent_chrome_id
+          ? chromeIdToNewId.get(n.parent_chrome_id) || null
+          : null,
+        position: n.position,
+        date_modified: n.date_modified,
+        synced_at: serverTime,
+      });
+    }
+    await IdMapStore.save();
+
+    // 5. Reset sync state, then mark initial merge done at server_time.
+    await SyncState.reset();
+    await SyncState.update({
+      initial_merge_done: true,
+      last_pulled_at: serverTime,
+      last_sync_at: Date.now(),
+      last_conflicts: 0,
+      last_error: null,
+    });
+
+    setBadge('success', bookmarks.length);
+    return { ok: true, total: bookmarks.length, server_time: serverTime };
+  } catch (err) {
+    console.error('[MarkSync/background] forceUpload failed', err);
+    setBadge('error');
+    return { ok: false, error: String((err && err.message) || err) };
+  }
+}
+
+// ─── Alarm wiring ─────────────────────────────────────────────────────
+function ensureAlarm() {
+  try {
+    chrome.alarms.get(ALARM_NAME, (existing) => {
+      if (!existing) {
+        chrome.alarms.create(ALARM_NAME, { periodInMinutes: PERIOD_MINUTES });
+        console.log(
+          `[MarkSync/background] alarm '${ALARM_NAME}' created (period=${PERIOD_MINUTES}min)`
+        );
+      }
+    });
+  } catch (err) {
+    console.error('[MarkSync/background] ensureAlarm failed', err);
+  }
+}
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm && alarm.name === ALARM_NAME) {
+    scheduledRun();
+  }
 });
 
-browserAPI.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.type === 'authenticate') {
-    sendResponse({ success: true });
-  }
+// First-time install / update — arm the alarm and run once immediately.
+chrome.runtime.onInstalled.addListener((details) => {
+  ensureAlarm();
+  console.log(
+    `[MarkSync/background] onInstalled reason=${details && details.reason}`
+  );
+  scheduledRun();
+});
+
+// Cold browser restart.
+chrome.runtime.onStartup.addListener(() => {
+  ensureAlarm();
+});
+
+// Service-worker wake — make sure the alarm still exists.
+ensureAlarm();
+
+// ─── Message router (FR-3) ────────────────────────────────────────────
+chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
+  (async () => {
+    try {
+      if (!request || typeof request !== 'object' || !request.type) {
+        sendResponse({ ok: false, error: 'invalid request' });
+        return;
+      }
+
+      switch (request.type) {
+        case 'SYNC_NOW': {
+          const res = await runSyncCycle({ manual: true });
+          sendResponse(res);
+          break;
+        }
+
+        case 'FORCE_UPLOAD': {
+          const res = await forceUpload();
+          sendResponse(res);
+          break;
+        }
+
+        case 'INITIAL_MERGE': {
+          const { apiUrl, token } = await getConfig();
+          if (!apiUrl || !token) {
+            sendResponse({ ok: false, error: 'not configured' });
+            break;
+          }
+          setBadge('syncing');
+          const res = await initialMerge({ apiUrl, token });
+          if (!res || !res.ok) {
+            setBadge(res && res.skipped ? 'no-op' : 'error');
+          } else {
+            const changed = (res.added || 0) + (res.remotePulled || 0);
+            if (changed > 0) setBadge('success', changed);
+            else setBadge('no-op');
+          }
+          sendResponse(res);
+          break;
+        }
+
+        case 'GET_STATE': {
+          const state = await SyncState.get();
+          const size = await IdMapStore.size();
+          sendResponse({ ok: true, state, idMapSize: size });
+          break;
+        }
+
+        // Legacy no-op kept so v2 popup builds don't error out mid-upgrade.
+        case 'authenticate': {
+          sendResponse({ ok: true });
+          break;
+        }
+
+        default:
+          sendResponse({
+            ok: false,
+            error: `unknown message type: ${request.type}`,
+          });
+      }
+    } catch (err) {
+      console.error('[MarkSync/background] onMessage failed', err);
+      sendResponse({ ok: false, error: String((err && err.message) || err) });
+    }
+  })();
+  // Return true to keep the message channel open for the async response.
   return true;
 });
