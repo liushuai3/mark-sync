@@ -38,156 +38,20 @@
 import * as IdMapStore from './idMapStore.js';
 import * as SyncState from './syncState.js';
 import { uuid } from './uuid.js';
-
-const CHROME_ROOT_TO_KEY = {
-  '1': 'bookmark_bar',
-  '2': 'other',
-  '3': 'mobile',
-};
-
-/**
- * @typedef {'bookmark_bar'|'other'|'mobile'} RootKey
- * @typedef {{
- *   chrome_id: string,
- *   type: 'folder'|'url',
- *   root: RootKey,
- *   parent_chrome_id: string | null,
- *   name: string,
- *   url: string | null,
- *   position: number,
- *   date_added: number | null,
- *   date_modified: number | null,
- *   parent_path: string,
- * }} LocalNode
- */
+import {
+  callApi,
+  getBookmarkTree,
+  createBookmark,
+  flattenLocalTree,
+  computeCloudPaths,
+  topoSortForCreate,
+  rootChromeIdFor,
+} from './bookmarkHelpers.js';
 
 /**
- * Fetch helper: talks to the MarkSync API with the standard bearer header.
- * @param {string} apiUrl
- * @param {string} token
- * @param {string} path
- * @param {{method?: string, body?: any}} [opts]
- * @returns {Promise<any>} The `data` field from `{ok:true,data:...}`.
+ * @typedef {import('./bookmarkHelpers.js').LocalNode} LocalNode
+ * @typedef {import('./bookmarkHelpers.js').RootKey} RootKey
  */
-async function callApi(apiUrl, token, path, opts = {}) {
-  const base = (apiUrl || '').replace(/\/$/, '');
-  const res = await fetch(base + path, {
-    method: opts.method || 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: opts.body ? JSON.stringify(opts.body) : undefined,
-  });
-  let json = null;
-  try {
-    json = await res.json();
-  } catch {
-    throw new Error(`HTTP ${res.status}`);
-  }
-  if (!json.ok) {
-    const msg = json.error || json.message || `HTTP ${res.status}`;
-    const err = new Error(msg);
-    err.code = json.code;
-    err.status = res.status;
-    throw err;
-  }
-  return json.data;
-}
-
-/**
- * Promisified `chrome.bookmarks.getTree`.
- * @returns {Promise<chrome.bookmarks.BookmarkTreeNode[]>}
- */
-function getBookmarkTree() {
-  return new Promise((resolve, reject) => {
-    chrome.bookmarks.getTree((tree) => {
-      const err = chrome.runtime && chrome.runtime.lastError;
-      if (err) return reject(new Error(err.message));
-      resolve(tree || []);
-    });
-  });
-}
-
-/**
- * Promisified `chrome.bookmarks.create`.
- * @param {{parentId: string, index?: number, title?: string, url?: string}} arg
- * @returns {Promise<chrome.bookmarks.BookmarkTreeNode>}
- */
-function createBookmark(arg) {
-  return new Promise((resolve, reject) => {
-    chrome.bookmarks.create(arg, (node) => {
-      const err = chrome.runtime && chrome.runtime.lastError;
-      if (err) return reject(new Error(err.message));
-      resolve(node);
-    });
-  });
-}
-
-/**
- * Walk the Chrome tree and yield flat LocalNode records for every user
- * bookmark/folder. Root-level Chrome nodes (id "0"/"1"/"2"/"3") are not
- * emitted themselves – they exist implicitly via their `root` label.
- *
- * @param {chrome.bookmarks.BookmarkTreeNode[]} tree
- * @returns {LocalNode[]}
- */
-function flattenLocalTree(tree) {
-  /** @type {LocalNode[]} */
-  const out = [];
-
-  /**
-   * @param {chrome.bookmarks.BookmarkTreeNode} node
-   * @param {RootKey | null} root
-   * @param {string} parentPath  '' at root level
-   * @param {string | null} parentChromeId  null for immediate children of root folders
-   */
-  function walk(node, root, parentPath, parentChromeId) {
-    if (!node) return;
-    const chromeId = String(node.id);
-
-    // Node itself is a root sentinel — descend without emitting.
-    if (CHROME_ROOT_TO_KEY[chromeId]) {
-      const rootKey = CHROME_ROOT_TO_KEY[chromeId];
-      for (const child of node.children || []) {
-        walk(child, rootKey, '', null);
-      }
-      return;
-    }
-    // Chrome's synthetic "0" super-root: just descend.
-    if (chromeId === '0') {
-      for (const child of node.children || []) walk(child, null, '', null);
-      return;
-    }
-    if (!root) return; // Defensive: unknown root
-
-    const isFolder = !node.url;
-    /** @type {LocalNode} */
-    const rec = {
-      chrome_id: chromeId,
-      type: isFolder ? 'folder' : 'url',
-      root,
-      parent_chrome_id: parentChromeId,
-      name: node.title || '',
-      url: node.url || null,
-      position: typeof node.index === 'number' ? node.index : 0,
-      date_added: node.dateAdded ?? null,
-      date_modified: node.dateGroupModified ?? node.dateAdded ?? null,
-      parent_path: parentPath,
-    };
-    out.push(rec);
-
-    if (isFolder && node.children) {
-      const childParentPath = parentPath ? `${parentPath}/${rec.name}` : rec.name;
-      for (const child of node.children) {
-        walk(child, root, childParentPath, chromeId);
-      }
-    }
-  }
-
-  for (const top of tree) walk(top, null, '', null);
-  return out;
-}
 
 /**
  * Build (root, parent_path, name, url) dedupe key for both cloud and local rows.
@@ -199,73 +63,6 @@ function flattenLocalTree(tree) {
  */
 function dedupeKey(root, parentPath, name, url) {
   return `${root}\u0000${parentPath}\u0000${name}\u0000${url || ''}`;
-}
-
-/**
- * Compute parent_path for each cloud bookmark by walking parent_id chains.
- * Cloud bookmarks are keyed by id.
- *
- * @param {Array<object>} cloudList
- * @returns {Map<string, string>} cloud_id -> parent_path (excluding self)
- */
-function computeCloudPaths(cloudList) {
-  const byId = new Map(cloudList.map((b) => [b.id, b]));
-  const pathCache = new Map();
-
-  /** @param {string | null} id */
-  function pathOf(id) {
-    if (!id) return '';
-    if (pathCache.has(id)) return pathCache.get(id);
-    const b = byId.get(id);
-    if (!b) return '';
-    const above = pathOf(b.parent_id);
-    const p = above ? `${above}/${b.name}` : b.name;
-    pathCache.set(id, p);
-    return p;
-  }
-
-  const result = new Map();
-  for (const b of cloudList) {
-    result.set(b.id, pathOf(b.parent_id));
-  }
-  return result;
-}
-
-/**
- * Topologically sort cloud rows to create (parent first, folders before urls,
- * `position` ascending within a sibling group).
- * @param {Array<object>} rows
- * @returns {Array<object>}
- */
-function topoSortForCreate(rows) {
-  const remaining = new Map(rows.map((r) => [r.id, r]));
-  const done = new Set();
-  const out = [];
-  const guardMax = rows.length + 8;
-  let guard = 0;
-
-  while (remaining.size && guard++ < guardMax) {
-    /** @type {object[]} */
-    const ready = [];
-    for (const r of remaining.values()) {
-      if (r.parent_id == null || done.has(r.parent_id) || !remaining.has(r.parent_id)) {
-        ready.push(r);
-      }
-    }
-    if (!ready.length) break; // cycle / dangling parent
-    ready.sort((a, b) => {
-      if (a.type !== b.type) return a.type === 'folder' ? -1 : 1;
-      return (a.position ?? 0) - (b.position ?? 0);
-    });
-    for (const r of ready) {
-      out.push(r);
-      done.add(r.id);
-      remaining.delete(r.id);
-    }
-  }
-  // Append any leftovers (best-effort) so nothing is silently dropped.
-  for (const r of remaining.values()) out.push(r);
-  return out;
 }
 
 /**
@@ -415,10 +212,7 @@ export async function initialMerge({ apiUrl, token }) {
       }
       if (!parentChromeId) {
         // Top-level under one of the Chrome roots.
-        const rootChromeId = Object.keys(CHROME_ROOT_TO_KEY).find(
-          (k) => CHROME_ROOT_TO_KEY[k] === c.root
-        );
-        parentChromeId = rootChromeId || '1';
+        parentChromeId = rootChromeIdFor(c.root);
       }
 
       try {
