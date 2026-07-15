@@ -1,8 +1,8 @@
-// Package the browser extension into a zip using the system `zip` binary.
-// Avoids extra node deps (no root package.json here). Requires `zip` in PATH.
+// Package the browser extension into a zip.
+// Prefers 'archiver' (pure JS, works in Docker where NODE_PATH=/app/backend/node_modules has it).
+// Falls back to system `zip` binary if archiver isn't available (dev host convenience).
 const fs = require('fs');
 const path = require('path');
-const { execFileSync } = require('child_process');
 
 const src = process.env.SRC || path.resolve(__dirname, '..', 'extension');
 const out =
@@ -19,23 +19,71 @@ if (fs.existsSync(out)) fs.unlinkSync(out);
 
 const excludes = [
   '.DS_Store',
-  '*/.DS_Store',
-  'docs/*',
-  'docs/**',
+  'docs',
   'CLAUDE.md',
   'TESTING.md',
 ];
 
-try {
-  execFileSync(
-    'zip',
-    ['-r', '-9', out, '.', '-x', ...excludes],
-    { cwd: src, stdio: ['ignore', 'inherit', 'inherit'] }
-  );
-} catch (e) {
-  console.error('❌ zip failed:', e.message);
-  process.exit(1);
+function shouldExclude(relPath) {
+  if (excludes.includes(relPath)) return true;
+  if (relPath.startsWith('docs/') || relPath.startsWith('docs\\')) return true;
+  if (relPath.endsWith('/.DS_Store') || relPath === '.DS_Store') return true;
+  return false;
 }
 
-const size = fs.statSync(out).size;
-console.log('✅ extension zip:', size, 'bytes ->', out);
+async function useArchiver() {
+  let archiver;
+  try {
+    archiver = require('archiver');
+  } catch {
+    return false;
+  }
+  await new Promise((resolve, reject) => {
+    const output = fs.createWriteStream(out);
+    const zip = archiver('zip', { zlib: { level: 9 } });
+    output.on('close', resolve);
+    output.on('error', reject);
+    zip.on('warning', (err) => (err.code === 'ENOENT' ? console.warn(err) : reject(err)));
+    zip.on('error', reject);
+    zip.pipe(output);
+
+    // Walk src, honoring excludes
+    const walk = (dir, base) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const abs = path.join(dir, entry.name);
+        const rel = base ? `${base}/${entry.name}` : entry.name;
+        if (shouldExclude(rel)) continue;
+        if (entry.isDirectory()) {
+          walk(abs, rel);
+        } else if (entry.isFile()) {
+          zip.file(abs, { name: rel });
+        }
+      }
+    };
+    walk(src, '');
+    zip.finalize();
+  });
+  return true;
+}
+
+function useSystemZip() {
+  const { execFileSync } = require('child_process');
+  const args = ['-r', '-9', out, '.', '-x'];
+  args.push('.DS_Store', '*/.DS_Store', 'docs/*', 'docs/**', 'CLAUDE.md', 'TESTING.md');
+  execFileSync('zip', args, { cwd: src, stdio: ['ignore', 'inherit', 'inherit'] });
+}
+
+(async () => {
+  try {
+    const ok = await useArchiver();
+    if (!ok) {
+      console.log('archiver not found, falling back to system zip');
+      useSystemZip();
+    }
+  } catch (e) {
+    console.error('❌ zip failed:', e.message);
+    process.exit(1);
+  }
+  const size = fs.statSync(out).size;
+  console.log('✅ extension zip:', size, 'bytes ->', out);
+})();
