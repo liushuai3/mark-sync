@@ -2,6 +2,10 @@
 
 轻量级书签同步系统 — 浏览器扩展 + 后端 API + Web 管理台三件套。
 
+> **v3.0 (2026-07)** — 全面重写同步引擎为**可靠的双向增量同步**：
+> UUID 主键、字段级 LWW 冲突解决、删除墓碑、`server_updated_at` 增量拉取、`force` 强制覆盖。
+> 旧版基于 `path` 的单向推送默认不兼容；升级时服务端会自动 DROP 旧 `bookmarks` 表（仅书签数据，用户/Token 保留）。详见 [`docs/CHANGELOG.md`](docs/CHANGELOG.md) 与 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+
 ## 组成
 
 - **`extension/`** — Chrome/Firefox 扩展（Manifest V3），基于 BookmarkSync 改造，支持 Gitee Gist + 自建后端双模式
