@@ -1,3 +1,7 @@
+// TODO(P1): v3.0 refactor — rewrite this route to remove legacy `path` field
+// and switch to `server_updated_at` as the pull `since` baseline (SRS §5.2 / §6).
+// SQL string literals below still reference the dropped `path` column and
+// the removed `updated_at` column; they will fail at runtime until P1 lands.
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { db, now, type Bookmark, type User, type ApiToken } from '../db.js';

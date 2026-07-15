@@ -1,3 +1,7 @@
+// TODO(P1): v3.0 refactor — remove legacy `path` field usage and align
+// this route with `server_updated_at` versioning (SRS §5.2). The UPDATE
+// statement below still references dropped columns and will fail at
+// runtime until P1 rewrites it.
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { db, now, type Bookmark, type User } from '../db.js';

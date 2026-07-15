@@ -10,6 +10,25 @@ db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 db.pragma('synchronous = NORMAL');
 
+// ─── v3.0 migration: drop legacy bookmarks table ──────────────────────
+// SRS §11.3 explicitly allows wiping bookmarks. Detect the legacy schema
+// (has `path` column or lacks `server_updated_at`) and drop it before the
+// CREATE TABLE below re-materialises the v3.0 shape.
+try {
+  const cols = db.prepare(`PRAGMA table_info(bookmarks)`).all() as Array<{ name: string }>;
+  if (cols.length > 0) {
+    const hasPath = cols.some((c) => c.name === 'path');
+    const hasServerUpdatedAt = cols.some((c) => c.name === 'server_updated_at');
+    if (hasPath || !hasServerUpdatedAt) {
+      db.exec('DROP TABLE IF EXISTS bookmarks');
+      // eslint-disable-next-line no-console
+      console.log('[migration] Dropped legacy bookmarks table for v3.0');
+    }
+  }
+} catch {
+  // best-effort: if PRAGMA fails, CREATE TABLE below will still run
+}
+
 const schema = `
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,6 +55,8 @@ CREATE TABLE IF NOT EXISTS api_tokens (
 CREATE INDEX IF NOT EXISTS idx_tokens_user ON api_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_tokens_hash ON api_tokens(token_hash);
 
+-- v3.0 bookmarks table (SRS 5.2). 'path' is derived from parent_id chain
+-- and no longer stored. 'server_updated_at' is the pull 'since' baseline.
 CREATE TABLE IF NOT EXISTS bookmarks (
   id TEXT PRIMARY KEY,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -44,19 +65,17 @@ CREATE TABLE IF NOT EXISTS bookmarks (
   root TEXT NOT NULL,
   name TEXT NOT NULL,
   url TEXT,
-  path TEXT NOT NULL,
-  position INTEGER DEFAULT 0,
+  position INTEGER NOT NULL DEFAULT 0,
   date_added INTEGER,
   date_modified INTEGER,
+  server_updated_at INTEGER NOT NULL,
   deleted_at INTEGER,
-  version INTEGER DEFAULT 1,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
+  version INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_bookmarks_user ON bookmarks(user_id, deleted_at);
-CREATE INDEX IF NOT EXISTS idx_bookmarks_url ON bookmarks(user_id, url);
-CREATE INDEX IF NOT EXISTS idx_bookmarks_path ON bookmarks(user_id, path);
-CREATE INDEX IF NOT EXISTS idx_bookmarks_updated ON bookmarks(user_id, updated_at);
+CREATE INDEX IF NOT EXISTS idx_bookmarks_user_updated ON bookmarks(user_id, server_updated_at);
+CREATE INDEX IF NOT EXISTS idx_bookmarks_parent ON bookmarks(parent_id);
 
 CREATE TABLE IF NOT EXISTS sync_logs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -146,14 +165,13 @@ export type Bookmark = {
   root: 'bookmark_bar' | 'other' | 'mobile';
   name: string;
   url: string | null;
-  path: string;
   position: number;
   date_added: number | null;
   date_modified: number | null;
+  server_updated_at: number;
   deleted_at: number | null;
   version: number;
   created_at: number;
-  updated_at: number;
 };
 
 export type SyncLog = {

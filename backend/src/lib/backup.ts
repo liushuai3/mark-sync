@@ -142,6 +142,7 @@ export function restoreBackup(userId: number, id: number): RestoreResult {
         b.root,
         b.name,
         b.url ?? null,
+        // @ts-expect-error P1 will rewrite backup restore (v3.0 drops `path`)
         b.path,
         b.position ?? 0,
         b.date_added ?? ts,
