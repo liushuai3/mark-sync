@@ -18,6 +18,7 @@ import settings from './routes/settings.js';
 import users from './routes/users.js';
 import security from './routes/security.js';
 import { startBackupScheduler } from './lib/backup.js';
+import { startTombstoneCleanup } from './lib/tombstone-cleanup.js';
 import { existsSync } from 'node:fs';
 
 const app = new Hono();
@@ -106,6 +107,7 @@ serve(
   (info) => {
     logger.info(`MarkSync backend listening on http://0.0.0.0:${info.port} (${config.nodeEnv})`);
     startBackupScheduler();
+    startTombstoneCleanup();
     ensureAdminUser().catch((err) => logger.error('ensureAdminUser failed', err));
   }
 );

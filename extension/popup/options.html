@@ -4,15 +4,6 @@
   <meta charset="UTF-8">
   <title>MarkSync 设置</title>
   <link rel="stylesheet" href="options.css">
-  <style>
-    .test-btn { padding: 6px 12px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer; }
-    .test-btn:hover { background: #444; }
-    .test-result { margin-top: 8px; padding: 6px; font-size: 12px; border-radius: 4px; display: none; }
-    .test-result.ok { display: block; background: #E8F5E9; color: #2E7D32; }
-    .test-result.err { display: block; background: #FFEBEE; color: #C62828; }
-    .help-panel { margin-top: 12px; padding: 8px; background: #FAFAFA; border-radius: 4px; font-size: 12px; }
-    .help-panel a { color: #2196F3; }
-  </style>
 </head>
 <body>
   <div class="container">
@@ -23,17 +14,23 @@
       <input type="text" id="marksyncApiUrl" placeholder="https://marksync.zcoolq.cn/api">
       <p class="help-text">例：<code>https://marksync.zcoolq.cn/api</code> 或 <code>http://localhost:3000/api</code></p>
     </div>
+
     <div class="form-group">
       <label for="marksyncToken">API Token</label>
-      <input type="password" id="marksyncToken" placeholder="mks_xxxxxxxx...">
+      <div class="input-with-eye">
+        <input type="password" id="marksyncToken" placeholder="mks_xxxxxxxx...">
+        <button type="button" id="toggleTokenBtn" class="eye-btn" title="显示 / 隐藏">👁</button>
+      </div>
     </div>
+
     <div class="form-group">
       <button type="button" id="testConnBtn" class="test-btn">测试连接</button>
       <div id="testResult" class="test-result"></div>
     </div>
+
     <div class="help-panel">
       <strong>📖 如何获取 Token？</strong>
-      <ol style="margin: 6px 0 0 20px; padding: 0;">
+      <ol>
         <li>打开 Web 管理台（API URL 去掉 <code>/api</code>）</li>
         <li>登录后进入"API Token"页面</li>
         <li>点击"创建新 Token"，复制生成的 <code>mks_xxx</code></li>
@@ -50,8 +47,9 @@
     <div class="button-group">
       <button id="saveButton">保存设置</button>
     </div>
+
     <div id="status"></div>
   </div>
-  <script type="module" src="options.js"></script>
+  <script src="options.js"></script>
 </body>
 </html>

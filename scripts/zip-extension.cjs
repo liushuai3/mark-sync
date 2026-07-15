@@ -1,24 +1,41 @@
+// Package the browser extension into a zip using the system `zip` binary.
+// Avoids extra node deps (no root package.json here). Requires `zip` in PATH.
 const fs = require('fs');
-let archiver;
-try {
-  archiver = require('archiver');
-} catch (e) {
-  archiver = require(require('path').join(process.env.NODE_PATH || '/usr/local/lib/node_modules', 'archiver'));
+const path = require('path');
+const { execFileSync } = require('child_process');
+
+const src = process.env.SRC || path.resolve(__dirname, '..', 'extension');
+const out =
+  process.env.OUT ||
+  path.resolve(__dirname, '..', 'web', 'dist', 'downloads', 'marksync-extension-latest.zip');
+
+if (!fs.existsSync(src)) {
+  console.error('❌ extension source not found:', src);
+  process.exit(1);
 }
 
-const src = process.env.SRC || '/app/extension';
-const out = process.env.OUT || '/app/web/dist/downloads/marksync-extension-latest.zip';
+fs.mkdirSync(path.dirname(out), { recursive: true });
+if (fs.existsSync(out)) fs.unlinkSync(out);
 
-const output = fs.createWriteStream(out);
-const archive = archiver('zip', { zlib: { level: 9 } });
+const excludes = [
+  '.DS_Store',
+  '*/.DS_Store',
+  'docs/*',
+  'docs/**',
+  'CLAUDE.md',
+  'TESTING.md',
+];
 
-output.on('close', () => console.log('✅ extension zip:', archive.pointer(), 'bytes ->', out));
-archive.on('warning', w => console.warn('warn:', w));
-archive.on('error', e => { throw e; });
+try {
+  execFileSync(
+    'zip',
+    ['-r', '-9', out, '.', '-x', ...excludes],
+    { cwd: src, stdio: ['ignore', 'inherit', 'inherit'] }
+  );
+} catch (e) {
+  console.error('❌ zip failed:', e.message);
+  process.exit(1);
+}
 
-archive.pipe(output);
-archive.glob('**/*', {
-  cwd: src,
-  ignore: ['**/.DS_Store', 'docs/**', 'CLAUDE.md', 'TESTING.md']
-});
-archive.finalize();
+const size = fs.statSync(out).size;
+console.log('✅ extension zip:', size, 'bytes ->', out);

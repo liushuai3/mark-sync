@@ -4,7 +4,7 @@
       <n-space justify="space-between" align="center">
         <n-input
           v-model:value="search"
-          placeholder="搜索名称、URL 或路径"
+          placeholder="搜索名称或 URL"
           clearable
           style="width: 320px"
           @keyup.enter="load(1)"
@@ -65,9 +65,6 @@
         <n-form-item v-if="editForm.type === 'url'" label="URL">
           <n-input v-model:value="editForm.url" />
         </n-form-item>
-        <n-form-item label="路径">
-          <n-input v-model:value="editForm.path" />
-        </n-form-item>
       </n-form>
       <n-space justify="end">
         <n-button @click="editModal = false">取消</n-button>
@@ -95,7 +92,10 @@ const type = ref(null);
 const checkedRowKeys = ref([]);
 const editModal = ref(false);
 const saving = ref(false);
-const editForm = ref({ id: '', name: '', url: '', path: '', type: 'url' });
+const editForm = ref({ id: '', name: '', url: '', root: 'bookmark_bar', type: 'url' });
+
+const rootLabel = (r) =>
+  r === 'bookmark_bar' ? '书签栏' : r === 'other' ? '其他书签' : r === 'mobile' ? '移动书签' : '-';
 
 const pagination = ref({ page: 1, pageSize: 50, pageCount: 1, itemCount: 0, showSizePicker: true, pageSizes: [20, 50, 100, 200] });
 
@@ -142,7 +142,12 @@ const columns = [
           )
         : '-',
   },
-  { title: '路径', key: 'path', ellipsis: { tooltip: true }, width: 200 },
+  {
+    title: '所在根',
+    key: 'root',
+    width: 120,
+    render: (row) => rootLabel(row.root),
+  },
   {
     title: '添加时间',
     key: 'date_added',
@@ -211,7 +216,7 @@ function onEdit(row) {
     id: row.id,
     name: row.name,
     url: row.url || '',
-    path: row.path,
+    root: row.root,
     type: row.type,
   };
   editModal.value = true;
@@ -223,7 +228,6 @@ async function onSave() {
     await bookmarksApi.update(editForm.value.id, {
       name: editForm.value.name,
       url: editForm.value.url || undefined,
-      path: editForm.value.path,
     });
     message.success('已保存');
     editModal.value = false;

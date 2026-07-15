@@ -1,3 +1,6 @@
+// v3.0 refactor: `path` column dropped, `updated_at` renamed to
+// `server_updated_at`. Route now uses parent_id + server-derived timestamps
+// (SRS §5.2).
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { db, now, type Bookmark, type User } from '../db.js';
@@ -19,7 +22,6 @@ const editSchema = z.object({
   name: z.string().min(1).optional(),
   url: z.string().nullable().optional(),
   parent_id: z.string().nullable().optional(),
-  path: z.string().optional(),
 });
 
 const batchDeleteSchema = z.object({
@@ -38,9 +40,9 @@ app.get('/', (c) => {
   const params: any[] = [user.id];
 
   if (search) {
-    clauses.push('(name LIKE ? OR url LIKE ? OR path LIKE ?)');
+    clauses.push('(name LIKE ? OR url LIKE ?)');
     const like = `%${search}%`;
-    params.push(like, like, like);
+    params.push(like, like);
   }
   if (root) {
     clauses.push('root = ?');
@@ -124,16 +126,16 @@ app.put('/:id', async (c) => {
         name = COALESCE(?, name),
         url = COALESCE(?, url),
         parent_id = COALESCE(?, parent_id),
-        path = COALESCE(?, path),
         version = version + 1,
-        updated_at = ?
+        server_updated_at = ?,
+        date_modified = ?
       WHERE id = ? AND user_id = ? AND deleted_at IS NULL`
     )
     .run(
       patch.name ?? null,
       patch.url ?? null,
       patch.parent_id ?? null,
-      patch.path ?? null,
+      ts,
       ts,
       id,
       user.id
@@ -150,9 +152,9 @@ app.delete('/:id', (c) => {
   const ts = now();
   const info = db
     .prepare(
-      'UPDATE bookmarks SET deleted_at = ?, updated_at = ?, version = version + 1 WHERE id = ? AND user_id = ? AND deleted_at IS NULL'
+      'UPDATE bookmarks SET deleted_at = ?, server_updated_at = ?, date_modified = ?, version = version + 1 WHERE id = ? AND user_id = ? AND deleted_at IS NULL'
     )
-    .run(ts, ts, id, user.id);
+    .run(ts, ts, ts, id, user.id);
   if (info.changes === 0) {
     return c.json({ ok: false, error: 'Not found', code: 'NOT_FOUND' }, 404);
   }
@@ -168,12 +170,12 @@ app.post('/batch-delete', async (c) => {
   const { ids } = parsed.data;
   const ts = now();
   const stmt = db.prepare(
-    'UPDATE bookmarks SET deleted_at = ?, updated_at = ?, version = version + 1 WHERE id = ? AND user_id = ? AND deleted_at IS NULL'
+    'UPDATE bookmarks SET deleted_at = ?, server_updated_at = ?, date_modified = ?, version = version + 1 WHERE id = ? AND user_id = ? AND deleted_at IS NULL'
   );
   let count = 0;
   const tx = db.transaction(() => {
     for (const id of ids) {
-      const info = stmt.run(ts, ts, id, user.id);
+      const info = stmt.run(ts, ts, ts, id, user.id);
       if (info.changes > 0) count++;
     }
   });

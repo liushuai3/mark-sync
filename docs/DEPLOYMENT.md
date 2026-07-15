@@ -1,5 +1,16 @@
 # MarkSync 部署指南
 
+## ❗ v3.0 升级说明
+
+v3.0 重写了同步引擎与书签表 schema（参见 [`CHANGELOG.md`](CHANGELOG.md)）。升级时需注意：
+
+- **书签表会被 DROP 重建**。后端启动时 `db.ts` 检测到旧 schema（存在 `path` 列或缺 `server_updated_at`）则自动 `DROP TABLE bookmarks`。**用户 / API Token / 同步日志 / 备份 / 系统设置 全部保留**。
+- 升级前建议手动点一次“创建备份”（Web 管理台 → 备份）或 `docker exec marksync sqlite3 /app/backend/data/bookmarks.db '.backup /tmp/pre-v3.db'` 留底。
+- 客户端（浏览器扩展）**必须同步升级到 3.0.0**。旧插件调用 `/api/sync/push` 会因缺少 `date_modified` 字段而 400 失败。
+- 升级后首次插件启动会自动运行 `initialMerge`：本地 ↔ 服务器按 (root, parent_path, name, url) 去重合并，不会丢失任一侧独有的书签。
+
+中断回退：若升级失败，回退镜像并 `sqlite3 bookmarks.db '.restore /tmp/pre-v3.db'` 即可。
+
 ## 生产部署（Docker Compose）
 
 ### 1. 环境准备

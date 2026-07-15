@@ -59,11 +59,11 @@ const listEnabledConfigs = db.prepare<[], BackupConfig>(
   'SELECT * FROM backup_configs WHERE enabled = 1'
 );
 const insertRestoredBookmark = db.prepare(
-  `INSERT INTO bookmarks (id, user_id, type, parent_id, root, name, url, path, position, date_added, date_modified, deleted_at, version, created_at, updated_at)
-   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`
+  `INSERT INTO bookmarks (id, user_id, type, parent_id, root, name, url, position, date_added, date_modified, server_updated_at, deleted_at, version, created_at)
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`
 );
 const softDeleteAll = db.prepare(
-  'UPDATE bookmarks SET deleted_at = ?, updated_at = ?, version = version + 1 WHERE user_id = ? AND deleted_at IS NULL'
+  'UPDATE bookmarks SET deleted_at = ?, server_updated_at = ?, version = version + 1 WHERE user_id = ? AND deleted_at IS NULL'
 );
 // Suppress unused warning; kept for future "restore into existing" mode.
 void softDeleteAll;
@@ -142,12 +142,11 @@ export function restoreBackup(userId: number, id: number): RestoreResult {
         b.root,
         b.name,
         b.url ?? null,
-        b.path,
         b.position ?? 0,
         b.date_added ?? ts,
         b.date_modified ?? null,
+        ts, // server_updated_at
         b.deleted_at ?? null,
-        ts,
         ts
       );
       restored++;

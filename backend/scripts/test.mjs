@@ -1,7 +1,25 @@
 #!/usr/bin/env node
-// Integration test for MarkSync backend
+// v3.0 Integration test for MarkSync backend
+// Covers: auth/user/token CRUD (retained from v2)
+//        + full v3.0 sync suite (LWW, tombstones, force, incremental, expired since)
+//
+// The suite is self-contained: it starts a fresh backend against a temp DB
+// so results are deterministic regardless of any pre-existing data.
 
-const BASE = process.env.API_BASE || 'http://localhost:3000';
+import { spawn } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { dirname } from 'node:path';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const backendRoot = join(__dirname, '..');
+const PORT = process.env.TEST_PORT || 3939;
+const BASE = `http://127.0.0.1:${PORT}`;
+
+let passed = 0;
+let failed = 0;
 
 async function req(method, path, opts = {}) {
   const { token, body } = opts;
@@ -9,208 +27,458 @@ async function req(method, path, opts = {}) {
     method,
     headers: {
       'Content-Type': 'application/json',
+      Origin: BASE, // CSRF middleware exempts same-origin
       ...(token && { Authorization: `Bearer ${token}` }),
     },
     body: body ? JSON.stringify(body) : undefined,
   });
-  const json = await res.json();
+  let json = null;
+  try {
+    json = await res.json();
+  } catch {
+    // non-JSON response (rare)
+  }
   return { status: res.status, json };
 }
 
 function assert(cond, msg) {
-  if (!cond) {
-    console.error('❌', msg);
-    process.exit(1);
+  if (cond) {
+    console.log('  ✅', msg);
+    passed++;
+  } else {
+    console.log('  ❌', msg);
+    failed++;
   }
-  console.log('✅', msg);
+}
+
+function section(name) {
+  console.log('\n── ' + name + ' ──');
+}
+
+async function waitForServer(base, tries = 40) {
+  for (let i = 0; i < tries; i++) {
+    try {
+      const r = await fetch(base + '/health');
+      if (r.ok) return true;
+    } catch {}
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  return false;
 }
 
 async function main() {
-  console.log('--- MarkSync backend integration test ---');
-  console.log('BASE =', BASE);
+  console.log('--- MarkSync v3.0 backend integration test ---');
+  const tmp = mkdtempSync(join(tmpdir(), 'marksync-test-'));
+  const dbPath = join(tmp, 'test.db');
+  console.log('  temp DB:', dbPath);
 
-  // 1. Health
-  const health = await req('GET', '/health');
-  assert(health.status === 200 && health.json.ok, 'health check');
+  const tsxBin = join(backendRoot, 'node_modules/.bin/tsx');
+  const server = spawn(
+    tsxBin,
+    [join(backendRoot, 'src/index.ts')],
+    {
+      cwd: backendRoot,
+      env: {
+        ...process.env,
+        DB_PATH: dbPath,
+        PORT: String(PORT),
+        NODE_ENV: 'test',
+        LOG_LEVEL: 'error',
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }
+  );
 
-  // 2. Status - can register?
-  const status = await req('GET', '/api/auth/status');
-  console.log('  status:', JSON.stringify(status.json.data));
+  let serverLog = '';
+  server.stdout.on('data', (d) => (serverLog += d.toString()));
+  server.stderr.on('data', (d) => (serverLog += d.toString()));
 
-  // 3. Register (first user, is_admin = 1)
-  const username = 'testuser_' + Date.now();
-  const password = 'test123456';
-  const reg = await req('POST', '/api/auth/register', {
-    body: { username, password, email: `${username}@test.com` },
-  });
-  assert(reg.status === 200 && reg.json.ok, 'register first user');
-  const jwt = reg.json.data.token;
-  const userId = reg.json.data.user.id;
-  console.log('  userId:', userId, 'jwt:', jwt.slice(0, 30) + '...');
-
-  // 4. /me with JWT
-  const me = await req('GET', '/api/auth/me', { token: jwt });
-  assert(me.status === 200 && me.json.data.username === username, '/auth/me returns user');
-
-  // 5. Second register should fail
-  const reg2 = await req('POST', '/api/auth/register', {
-    body: { username: 'another', password: 'test1234' },
-  });
-  assert(reg2.status === 403 && reg2.json.code === 'REG_CLOSED', 'second registration blocked');
-
-  // 6. Login
-  const login = await req('POST', '/api/auth/login', {
-    body: { username, password },
-  });
-  assert(login.status === 200 && login.json.ok, 'login with correct password');
-
-  const badLogin = await req('POST', '/api/auth/login', {
-    body: { username, password: 'wrong' },
-  });
-  assert(badLogin.status === 401, 'login with wrong password fails');
-
-  // 7. Create API Token
-  const tokenRes = await req('POST', '/api/tokens', {
-    token: jwt,
-    body: { name: 'test-device' },
-  });
-  assert(tokenRes.status === 200 && tokenRes.json.data.token.startsWith('mks_'), 'create API token');
-  const apiToken = tokenRes.json.data.token;
-  const tokenId = tokenRes.json.data.id;
-  console.log('  apiToken prefix:', apiToken.slice(0, 12));
-
-  // 8. List tokens
-  const tokenList = await req('GET', '/api/tokens', { token: jwt });
-  assert(tokenList.json.data.length === 1, 'list tokens returns 1');
-  assert(!('token' in tokenList.json.data[0]), 'list does not leak plaintext token');
-
-  // 9. Push bookmarks
-  const b1 = {
-    id: 'uuid-folder-1',
-    type: 'folder',
-    parent_id: null,
-    root: 'bookmark_bar',
-    name: '工作',
-    url: null,
-    path: '/工作',
-    position: 0,
-    date_added: Date.now(),
+  const cleanup = () => {
+    try {
+      server.kill('SIGKILL');
+    } catch {}
+    try {
+      rmSync(tmp, { recursive: true, force: true });
+    } catch {}
   };
-  const b2 = {
-    id: 'uuid-url-1',
-    type: 'url',
-    parent_id: 'uuid-folder-1',
-    root: 'bookmark_bar',
-    name: 'Vue',
-    url: 'https://vuejs.org',
-    path: '/工作/Vue',
-    position: 0,
-    date_added: Date.now(),
-  };
-  const push1 = await req('POST', '/api/sync/push', {
-    token: apiToken,
-    body: { added: [b1, b2], modified: [], removed: [] },
+  process.on('exit', cleanup);
+  process.on('SIGINT', () => {
+    cleanup();
+    process.exit(130);
   });
-  assert(push1.status === 200 && push1.json.data.added_count === 2, 'push 2 new bookmarks');
 
-  // 10. Push again - should dedupe
-  const push2 = await req('POST', '/api/sync/push', {
-    token: apiToken,
-    body: { added: [b1, b2], modified: [], removed: [] },
-  });
-  assert(push2.json.data.added_count === 0 && push2.json.data.skipped_count === 2, 'push dedupe (0 added, 2 skipped)');
+  const ready = await waitForServer(BASE);
+  if (!ready) {
+    console.error('Server did not start');
+    console.error(serverLog);
+    cleanup();
+    process.exit(2);
+  }
 
-  // 11. Pull
-  const pull = await req('GET', '/api/sync/pull', { token: apiToken });
-  assert(pull.json.data.bookmarks.length === 2, 'pull returns 2 bookmarks');
-  assert('server_time' in pull.json.data, 'pull returns server_time');
+  try {
+    // ═════════════════════════════════════════════════════════════════
+    // Auth / user / token — retained from v2 (still valid in v3.0)
+    // ═════════════════════════════════════════════════════════════════
+    section('Auth & tokens (v2-carryover)');
 
-  // 12. Modify
-  const mod = await req('POST', '/api/sync/push', {
-    token: apiToken,
-    body: {
-      added: [],
-      modified: [{ id: 'uuid-url-1', name: 'Vue.js 官网' }],
-      removed: [],
-    },
-  });
-  assert(mod.json.data.modified_count === 1, 'modify 1 bookmark');
+    const health = await req('GET', '/health');
+    assert(health.status === 200 && health.json.ok, 'health check');
 
-  // 13. Remove
-  const rm = await req('POST', '/api/sync/push', {
-    token: apiToken,
-    body: { added: [], modified: [], removed: ['uuid-url-1'] },
-  });
-  assert(rm.json.data.removed_count === 1, 'remove 1 bookmark');
+    const status0 = await req('GET', '/api/auth/status');
+    assert(status0.status === 200 && status0.json.data.can_register, 'auth status (fresh DB → can register)');
 
-  // 14. Pull after removal - only folder left
-  const pull2 = await req('GET', '/api/sync/pull', { token: apiToken });
-  assert(pull2.json.data.bookmarks.length === 1, 'pull after removal returns 1 bookmark');
+    const username = 'testuser_' + Date.now();
+    const password = 'test123456';
+    const reg = await req('POST', '/api/auth/register', {
+      body: { username, password, email: `${username}@test.com` },
+    });
+    if (reg.status !== 200) {
+      console.error('register response:', reg.status, JSON.stringify(reg.json));
+    }
+    assert(reg.status === 200 && reg.json.ok, 'register first user');
+    const jwt = reg.json.data.token;
+    const userId = reg.json.data.user.id;
 
-  // 15. Pull with since - includes tombstone
-  const pull3 = await req('GET', '/api/sync/pull?since=0', { token: apiToken });
-  assert(pull3.json.data.bookmarks.length === 2, 'pull with since returns tombstone');
-  const tombstone = pull3.json.data.bookmarks.find((b) => b.id === 'uuid-url-1');
-  assert(tombstone && tombstone.deleted_at, 'tombstone has deleted_at');
+    const me = await req('GET', '/api/auth/me', { token: jwt });
+    assert(me.status === 200 && me.json.data.username === username, '/auth/me returns user');
 
-  // 16. Stats
-  const stats = await req('GET', '/api/stats', { token: jwt });
-  assert(stats.json.data.total_folders === 1, 'stats: 1 folder');
-  assert(stats.json.data.total_bookmarks === 0, 'stats: 0 active url');
-  assert(stats.json.data.total_tokens === 1, 'stats: 1 token');
+    const reg2 = await req('POST', '/api/auth/register', {
+      body: { username: 'another', password: 'test1234' },
+    });
+    assert(reg2.status === 403 && reg2.json.code === 'REG_CLOSED', 'second registration blocked');
 
-  // 17. Sync logs
-  const logs = await req('GET', '/api/sync-logs', { token: jwt });
-  assert(logs.json.data.total >= 4, 'sync logs recorded');
+    const login = await req('POST', '/api/auth/login', {
+      body: { username, password },
+    });
+    assert(login.status === 200 && login.json.ok, 'login with correct password');
 
-  // 18. Bookmarks list (JWT)
-  const bmList = await req('GET', '/api/bookmarks', { token: jwt });
-  assert(bmList.json.data.total === 1, 'bookmarks list (active only): 1');
+    const badLogin = await req('POST', '/api/auth/login', {
+      body: { username, password: 'wrong' },
+    });
+    assert(badLogin.status === 401, 'login with wrong password fails');
 
-  // 19. Bookmarks tree
-  const bmTree = await req('GET', '/api/bookmarks/tree', { token: jwt });
-  assert(bmTree.json.data.bookmark_bar.children.length === 1, 'tree: bookmark_bar has 1 child');
+    const tokenRes = await req('POST', '/api/tokens', {
+      token: jwt,
+      body: { name: 'test-device' },
+    });
+    assert(
+      tokenRes.status === 200 && tokenRes.json.data.token.startsWith('mks_'),
+      'create API token'
+    );
+    const apiToken = tokenRes.json.data.token;
+    const tokenId = tokenRes.json.data.id;
 
-  // 20. Force push
-  const force = await req('POST', '/api/sync/force', {
-    token: apiToken,
-    body: {
-      bookmarks: [
-        {
-          id: 'uuid-new-1',
-          type: 'url',
-          parent_id: null,
-          root: 'bookmark_bar',
-          name: 'GitHub',
-          url: 'https://github.com',
-          path: '/GitHub',
-          position: 0,
-        },
-      ],
-    },
-  });
-  assert(force.json.data.total === 1, 'force push: 1 total');
+    const tokenList = await req('GET', '/api/tokens', { token: jwt });
+    assert(tokenList.json.data.length === 1, 'list tokens returns 1');
+    assert(!('token' in tokenList.json.data[0]), 'list does not leak plaintext token');
 
-  const pull4 = await req('GET', '/api/sync/pull', { token: apiToken });
-  assert(pull4.json.data.bookmarks.length === 1 && pull4.json.data.bookmarks[0].name === 'GitHub', 'force push replaced all');
+    const noAuth = await req('GET', '/api/auth/me');
+    assert(noAuth.status === 401, 'unauthorized without token');
 
-  // 21. Auth error scenarios
-  const noAuth = await req('GET', '/api/auth/me');
-  assert(noAuth.status === 401, 'unauthorized without token');
+    const wrongToken = await req('GET', '/api/sync/pull', {
+      token: 'mks_' + 'x'.repeat(32),
+    });
+    assert(wrongToken.status === 401, 'invalid API token rejected');
 
-  const wrongToken = await req('GET', '/api/sync/pull', { token: 'mks_' + 'x'.repeat(32) });
-  assert(wrongToken.status === 401, 'invalid API token rejected');
+    // ═════════════════════════════════════════════════════════════════
+    // Sync v3.0 — full coverage of SRS §7, §8.3, §8.4, §8.5
+    // ═════════════════════════════════════════════════════════════════
+    section('sync/pull — without since → full + tombstone');
 
-  // 22. Revoke token
-  const revoke = await req('DELETE', `/api/tokens/${tokenId}`, { token: jwt });
-  assert(revoke.json.ok, 'revoke token');
-  const afterRevoke = await req('GET', '/api/sync/pull', { token: apiToken });
-  assert(afterRevoke.status === 401, 'revoked token rejected');
+    // Seed: two bookmarks
+    const now0 = Date.now();
+    const b1 = {
+      id: 'uuid-folder-1',
+      type: 'folder',
+      parent_id: null,
+      root: 'bookmark_bar',
+      name: '工作',
+      url: null,
+      position: 0,
+      date_added: now0,
+      date_modified: now0,
+    };
+    const b2 = {
+      id: 'uuid-url-1',
+      type: 'url',
+      parent_id: 'uuid-folder-1',
+      root: 'bookmark_bar',
+      name: 'Vue',
+      url: 'https://vuejs.org',
+      position: 0,
+      date_added: now0,
+      date_modified: now0,
+    };
+    const seed = await req('POST', '/api/sync/push', {
+      token: apiToken,
+      body: { added: [b1, b2], modified: [], removed: [] },
+    });
+    assert(seed.json.data.added_count === 2, 'seed: 2 new bookmarks written');
 
+    // Delete one to produce a tombstone
+    const rm = await req('POST', '/api/sync/push', {
+      token: apiToken,
+      body: { added: [], modified: [], removed: [{ id: 'uuid-url-1', date_modified: Date.now() }] },
+    });
+    assert(rm.json.data.removed_count === 1, 'seed: soft-delete uuid-url-1');
+
+    // Pull without since → full=true, tombstone included
+    const pullFull = await req('GET', '/api/sync/pull', { token: apiToken });
+    assert(pullFull.status === 200, 'pull without since returns 200');
+    assert(pullFull.json.data.full === true, 'pull without since: full=true');
+    assert(pullFull.json.data.bookmarks.length === 2, 'pull without since: returns 2 rows (active + tombstone)');
+    const tomb = pullFull.json.data.bookmarks.find((b) => b.id === 'uuid-url-1');
+    assert(tomb && tomb.deleted_at != null, 'pull without since: tombstone has deleted_at');
+    assert(typeof pullFull.json.data.server_time === 'number', 'pull returns server_time');
+
+    section('sync/pull — with since → incremental');
+    // Take snapshot of server_time, then add another bookmark
+    const t1 = pullFull.json.data.server_time;
+    await new Promise((r) => setTimeout(r, 10));
+    const b3 = {
+      id: 'uuid-url-2',
+      type: 'url',
+      parent_id: null,
+      root: 'other',
+      name: 'GitHub',
+      url: 'https://github.com',
+      position: 0,
+      date_added: Date.now(),
+      date_modified: Date.now(),
+    };
+    const seedB3 = await req('POST', '/api/sync/push', {
+      token: apiToken,
+      body: { added: [b3], modified: [], removed: [] },
+    });
+    assert(seedB3.json.data.added_count === 1, 'add b3');
+
+    const pullSince = await req('GET', `/api/sync/pull?since=${t1}`, { token: apiToken });
+    assert(pullSince.json.data.full === false, 'pull with valid since: full=false');
+    assert(
+      pullSince.json.data.bookmarks.length === 1 &&
+        pullSince.json.data.bookmarks[0].id === 'uuid-url-2',
+      'pull with since returns only the newer row'
+    );
+
+    section('sync/pull — expired since → full');
+    const expiredSince = Date.now() - 40 * 24 * 60 * 60 * 1000; // 40 days ago
+    const pullExpired = await req('GET', `/api/sync/pull?since=${expiredSince}`, {
+      token: apiToken,
+    });
+    assert(pullExpired.json.data.full === true, 'pull with since < now-30d: full=true');
+    assert(pullExpired.json.data.bookmarks.length === 3, 'pull expired since returns all 3 rows');
+
+    section('sync/push — added new / added existing id');
+    const b4 = {
+      id: 'uuid-url-3',
+      type: 'url',
+      parent_id: null,
+      root: 'bookmark_bar',
+      name: 'Node',
+      url: 'https://nodejs.org',
+      position: 0,
+      date_added: Date.now(),
+      date_modified: Date.now(),
+    };
+    const pushNew = await req('POST', '/api/sync/push', {
+      token: apiToken,
+      body: { added: [b4], modified: [], removed: [] },
+    });
+    assert(pushNew.json.data.added_count === 1, 'push added new → written');
+
+    const pushDup = await req('POST', '/api/sync/push', {
+      token: apiToken,
+      body: { added: [b4], modified: [], removed: [] },
+    });
+    assert(pushDup.json.data.added_count === 0, 'push added existing id → not added');
+    assert(
+      pushDup.json.data.conflicts.length === 1 &&
+        pushDup.json.data.conflicts[0].reason === 'newer_exists',
+      'push added existing id → conflicts newer_exists'
+    );
+
+    section('sync/push — modified newer / older / against tombstone');
+    // First read current server date_modified for b4
+    const pullNow = await req('GET', '/api/sync/pull', { token: apiToken });
+    const b4Row = pullNow.json.data.bookmarks.find((b) => b.id === 'uuid-url-3');
+    const b4Dm = b4Row.date_modified;
+
+    const modNewer = await req('POST', '/api/sync/push', {
+      token: apiToken,
+      body: {
+        added: [],
+        modified: [{ id: 'uuid-url-3', name: 'Node.js', date_modified: b4Dm + 1000 }],
+        removed: [],
+      },
+    });
+    assert(modNewer.json.data.modified_count === 1, 'modify newer date_modified → updated');
+    assert(
+      modNewer.json.data.conflicts.length === 0,
+      'modify newer → no conflicts'
+    );
+
+    // Verify version bumped
+    const pullVer = await req('GET', '/api/sync/pull', { token: apiToken });
+    const b4After = pullVer.json.data.bookmarks.find((b) => b.id === 'uuid-url-3');
+    assert(b4After.version >= 2, 'modify: version incremented (>=2)');
+    assert(b4After.name === 'Node.js', 'modify: name applied');
+
+    const modOlder = await req('POST', '/api/sync/push', {
+      token: apiToken,
+      body: {
+        added: [],
+        modified: [
+          { id: 'uuid-url-3', name: 'STALE', date_modified: b4Dm - 10000 },
+        ],
+        removed: [],
+      },
+    });
+    assert(modOlder.json.data.modified_count === 0, 'modify older date_modified → rejected');
+    assert(
+      modOlder.json.data.conflicts.length === 1 &&
+        modOlder.json.data.conflicts[0].reason === 'newer_exists',
+      'modify older → conflicts newer_exists'
+    );
+
+    // Modify against a tombstone
+    const modTomb = await req('POST', '/api/sync/push', {
+      token: apiToken,
+      body: {
+        added: [],
+        modified: [
+          { id: 'uuid-url-1', name: 'zombie', date_modified: Date.now() + 100000 },
+        ],
+        removed: [],
+      },
+    });
+    assert(modTomb.json.data.modified_count === 0, 'modify against tombstone → rejected');
+    assert(
+      modTomb.json.data.conflicts.length === 1 &&
+        modTomb.json.data.conflicts[0].reason === 'already_deleted',
+      'modify against tombstone → conflicts already_deleted'
+    );
+
+    section('sync/push — modified missing id');
+    const modMissing = await req('POST', '/api/sync/push', {
+      token: apiToken,
+      body: {
+        added: [],
+        modified: [{ id: 'ghost-id', name: 'x', date_modified: Date.now() }],
+        removed: [],
+      },
+    });
+    assert(
+      modMissing.json.data.conflicts.length === 1 &&
+        modMissing.json.data.conflicts[0].reason === 'not_found',
+      'modify missing id → conflicts not_found'
+    );
+
+    section('sync/push — removed active / missing / already deleted (idempotent)');
+    const rmActive = await req('POST', '/api/sync/push', {
+      token: apiToken,
+      body: {
+        added: [],
+        modified: [],
+        removed: [{ id: 'uuid-url-2', date_modified: Date.now() }],
+      },
+    });
+    assert(rmActive.json.data.removed_count === 1, 'remove active row → 1 removed');
+
+    const rmMissing = await req('POST', '/api/sync/push', {
+      token: apiToken,
+      body: {
+        added: [],
+        modified: [],
+        removed: [{ id: 'ghost-id-2', date_modified: Date.now() }],
+      },
+    });
+    assert(rmMissing.json.data.removed_count === 0, 'remove missing id → 0, no error');
+    assert(
+      rmMissing.json.data.conflicts.length === 0,
+      'remove missing id → no conflict (idempotent silent)'
+    );
+
+    const rmDup = await req('POST', '/api/sync/push', {
+      token: apiToken,
+      body: {
+        added: [],
+        modified: [],
+        removed: [{ id: 'uuid-url-2', date_modified: Date.now() }],
+      },
+    });
+    assert(rmDup.json.data.removed_count === 0, 'remove already-deleted → 0, no error');
+    assert(rmDup.json.data.conflicts.length === 0, 'remove already-deleted → idempotent silent');
+
+    section('sync/force — full overwrite');
+    const forceRes = await req('POST', '/api/sync/force', {
+      token: apiToken,
+      body: {
+        bookmarks: [
+          {
+            id: 'uuid-forced-1',
+            type: 'url',
+            parent_id: null,
+            root: 'bookmark_bar',
+            name: 'ForcedOnly',
+            url: 'https://example.com',
+            position: 0,
+            date_added: Date.now(),
+            date_modified: Date.now(),
+          },
+        ],
+      },
+    });
+    assert(forceRes.json.data.total === 1, 'force push: 1 total inserted');
+
+    const pullPostForce = await req('GET', '/api/sync/pull', { token: apiToken });
+    const active = pullPostForce.json.data.bookmarks.filter((b) => b.deleted_at == null);
+    assert(active.length === 1 && active[0].id === 'uuid-forced-1', 'force push: only forced row active');
+    // Every pre-force row is now a tombstone
+    const tombs = pullPostForce.json.data.bookmarks.filter((b) => b.deleted_at != null);
+    assert(tombs.length >= 3, `force push: prior rows became tombstones (${tombs.length})`);
+
+    // ═════════════════════════════════════════════════════════════════
+    // Stats / logs / bookmarks list — retained from v2
+    // ═════════════════════════════════════════════════════════════════
+    section('Stats & sync logs');
+    const stats = await req('GET', '/api/stats', { token: jwt });
+    assert(stats.status === 200 && stats.json.ok, 'stats endpoint responds');
+    assert(stats.json.data.total_tokens === 1, 'stats: 1 api token');
+
+    const logs = await req('GET', '/api/sync-logs', { token: jwt });
+    assert(logs.status === 200 && logs.json.data.total >= 5, 'sync-logs: at least 5 events logged');
+
+    section('Bookmarks list & tree (JWT admin views)');
+    const bmList = await req('GET', '/api/bookmarks', { token: jwt });
+    assert(bmList.status === 200 && bmList.json.data.total === 1, 'bookmarks list (active): 1');
+    const bmTree = await req('GET', '/api/bookmarks/tree', { token: jwt });
+    assert(bmTree.status === 200, 'bookmarks tree responds');
+    assert(
+      bmTree.json.data.bookmark_bar.children.length === 1,
+      'tree: bookmark_bar has 1 child'
+    );
+
+    section('Token revocation');
+    const revoke = await req('DELETE', `/api/tokens/${tokenId}`, { token: jwt });
+    assert(revoke.json.ok, 'revoke token');
+    const afterRevoke = await req('GET', '/api/sync/pull', { token: apiToken });
+    assert(afterRevoke.status === 401, 'revoked token rejected');
+  } catch (err) {
+    console.error('\nFatal:', err);
+    failed++;
+  }
+
+  cleanup();
+
+  console.log(`\n──────────────────────────────────────────`);
+  console.log(`  ${passed} passed, ${failed} failed`);
+  if (failed > 0) {
+    process.exit(1);
+  }
   console.log('\n🎉 All tests passed!');
 }
 
 main().catch((err) => {
-  console.error('Fatal:', err);
+  console.error('Fatal top-level:', err);
   process.exit(1);
 });

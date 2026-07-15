@@ -423,3 +423,67 @@ button:active:not(:disabled) {
   transform: translateY(0);
   box-shadow: none;
 }
+
+/* v3 popup additions */
+.unconfigured {
+  padding: 16px;
+  text-align: center;
+  background: #FFF8E1;
+  border-radius: 6px;
+  color: #6D4C41;
+}
+
+.unconfigured p {
+  margin: 0 0 12px 0;
+}
+
+.status-panel {
+  margin-top: 14px;
+  padding: 10px 12px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 3px 0;
+}
+
+.status-label {
+  color: #5f6368;
+}
+
+.status-value {
+  color: #202124;
+  font-weight: 500;
+}
+
+.status-value.warning {
+  color: #f57c00;
+}
+
+.toast {
+  margin-top: 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  text-align: center;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  min-height: 0;
+  pointer-events: none;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.toast.info { background: #E3F2FD; color: #1565C0; }
+.toast.success { background: #E8F5E9; color: #2E7D32; }
+.toast.warn { background: #FFF3E0; color: #E65100; }
+.toast.err { background: #FFEBEE; color: #C62828; }
