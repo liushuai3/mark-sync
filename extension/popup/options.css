@@ -65,4 +65,94 @@ button:hover {
   font-size: 12px;
   margin-top: 5px;
   margin-left: 20px;
-} 
+}
+
+/* v3 options additions */
+.input-with-eye {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-with-eye input {
+  flex: 1;
+  padding-right: 36px;
+}
+
+.eye-btn {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 16px;
+}
+
+.eye-btn:hover {
+  background: #f0f0f0;
+  border-radius: 4px;
+}
+
+input[type="password"], input[type="text"] {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+.test-btn {
+  padding: 6px 12px;
+  background: #666;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.test-btn:hover {
+  background: #444;
+}
+
+.test-result {
+  margin-top: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 4px;
+  display: none;
+}
+
+.test-result.ok {
+  display: block;
+  background: #E8F5E9;
+  color: #2E7D32;
+}
+
+.test-result.err {
+  display: block;
+  background: #FFEBEE;
+  color: #C62828;
+}
+
+.help-panel {
+  margin: 12px 0;
+  padding: 10px 12px;
+  background: #FAFAFA;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #444;
+}
+
+.help-panel ol {
+  margin: 6px 0 0 20px;
+  padding: 0;
+}
+
+.help-panel a {
+  color: #2196F3;
+}
+ 

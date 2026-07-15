@@ -1,82 +1,208 @@
-import { testConnection } from '../utils/syncService.js';
+/**
+ * MarkSync options page (v3)
+ *
+ * 存储 key:
+ *   chrome.storage.sync : marksync_api_url, marksync_token, autoSync, backend_type
+ *
+ * Legacy v2 keys to clean:
+ *   sync   : accessToken, encryptionKey, gistDescription
+ *   local  : accessToken, encryptionKey, gistDescription (若曾误写)
+ */
 
+const DEFAULT_API_URL = 'https://marksync.zcoolq.cn/api';
+const DEFAULT_HOST = 'https://marksync.zcoolq.cn/*';
 const STORAGE_KEYS = ['marksync_api_url', 'marksync_token', 'autoSync'];
+const LEGACY_SYNC_KEYS = ['accessToken', 'encryptionKey', 'gistDescription'];
+const LEGACY_LOCAL_KEYS = ['accessToken', 'encryptionKey', 'gistDescription'];
+
+function storageSyncGet(keys) {
+  return new Promise((r) => chrome.storage.sync.get(keys, (v) => r(v || {})));
+}
+
+function storageSyncSet(obj) {
+  return new Promise((r) => chrome.storage.sync.set(obj, () => r()));
+}
+
+function storageSyncRemove(keys) {
+  return new Promise((r) => chrome.storage.sync.remove(keys, () => r()));
+}
+
+function storageLocalRemove(keys) {
+  return new Promise((r) => chrome.storage.local.remove(keys, () => r()));
+}
+
+function sendMessage(msg) {
+  return new Promise((resolve, reject) => {
+    try {
+      chrome.runtime.sendMessage(msg, (response) => {
+        const err = chrome.runtime.lastError;
+        if (err) return reject(new Error(err.message));
+        resolve(response);
+      });
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+function normalizeApiUrl(raw) {
+  return String(raw || '').trim().replace(/\/+$/, '');
+}
+
+/**
+ * Ensure host permission for the given API URL.
+ * SRS §11.3: `https://marksync.zcoolq.cn/*` is a granted default; skip prompt when covered.
+ */
+async function ensureHostPermission(apiUrl) {
+  let originPattern;
+  try {
+    const u = new URL(apiUrl);
+    originPattern = `${u.protocol}//${u.host}/*`;
+  } catch {
+    throw new Error('API URL 格式不合法');
+  }
+
+  const already = await new Promise((r) =>
+    chrome.permissions.contains({ origins: [originPattern] }, (b) => r(Boolean(b)))
+  );
+  if (already) return true;
+
+  return await new Promise((resolve, reject) => {
+    try {
+      chrome.permissions.request({ origins: [originPattern] }, (granted) => {
+        const err = chrome.runtime.lastError;
+        if (err) return reject(new Error(err.message));
+        resolve(Boolean(granted));
+      });
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+function showStatus(message, kind = 'success', durationMs = 3500) {
+  const status = document.getElementById('status');
+  status.textContent = message;
+  status.className = kind;
+  clearTimeout(showStatus._t);
+  showStatus._t = setTimeout(() => {
+    status.textContent = '';
+    status.className = '';
+  }, durationMs);
+}
+
+async function handleTestConnection() {
+  const btn = document.getElementById('testConnBtn');
+  const result = document.getElementById('testResult');
+  btn.disabled = true;
+  result.className = 'test-result';
+  result.textContent = '测试中...';
+  result.style.display = 'block';
+
+  const apiUrl = normalizeApiUrl(document.getElementById('marksyncApiUrl').value);
+  const token = document.getElementById('marksyncToken').value.trim();
+
+  if (!apiUrl || !token) {
+    result.className = 'test-result err';
+    result.textContent = '请先填写 API URL 和 Token';
+    btn.disabled = false;
+    return;
+  }
+
+  try {
+    const resp = await fetch(`${apiUrl}/auth/me`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!resp.ok) {
+      let msg = `HTTP ${resp.status}`;
+      try {
+        const data = await resp.json();
+        if (data && (data.message || data.error)) msg = data.message || data.error;
+      } catch {}
+      throw new Error(msg);
+    }
+    let user = null;
+    try {
+      user = await resp.json();
+    } catch {}
+    result.className = 'test-result ok';
+    result.textContent = user && (user.username || user.email)
+      ? `✅ 连接成功，用户：${user.username || user.email}`
+      : '✅ 连接成功';
+  } catch (err) {
+    result.className = 'test-result err';
+    result.textContent = `❌ ${err.message || '连接失败'}`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function cleanupLegacyKeys() {
+  try {
+    await storageSyncRemove(LEGACY_SYNC_KEYS);
+    await storageLocalRemove(LEGACY_LOCAL_KEYS);
+  } catch (err) {
+    console.warn('legacy cleanup 失败', err);
+  }
+}
+
+async function handleSave() {
+  const btn = document.getElementById('saveButton');
+  const apiUrl = normalizeApiUrl(document.getElementById('marksyncApiUrl').value);
+  const token = document.getElementById('marksyncToken').value.trim();
+  const autoSync = document.getElementById('autoSync').checked;
+
+  if (!apiUrl) return showStatus('请输入 API URL', 'error');
+  if (!token) return showStatus('请输入 API Token', 'error');
+  if (!token.startsWith('mks_')) return showStatus('Token 格式错误，应以 mks_ 开头', 'error');
+
+  btn.disabled = true;
+  try {
+    // 1. Host permission
+    const granted = await ensureHostPermission(apiUrl);
+    if (!granted) {
+      showStatus('未授权域名访问，无法保存', 'error');
+      return;
+    }
+
+    // 2. Save
+    await storageSyncSet({
+      marksync_api_url: apiUrl,
+      marksync_token: token,
+      autoSync,
+      backend_type: 'marksync',
+    });
+
+    // 3. Clean legacy
+    await cleanupLegacyKeys();
+
+    // 4. Trigger initial merge
+    showStatus('配置已保存，正在合并书签...', 'success', 8000);
+    try {
+      await sendMessage({ type: 'INITIAL_MERGE' });
+    } catch (err) {
+      console.warn('INITIAL_MERGE 触发失败', err);
+    }
+  } catch (err) {
+    showStatus(`保存失败：${err.message || err}`, 'error', 5000);
+  } finally {
+    btn.disabled = false;
+  }
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
-  const state = await new Promise((r) => chrome.storage.sync.get(STORAGE_KEYS, r));
-
+  const state = await storageSyncGet(STORAGE_KEYS);
   document.getElementById('marksyncApiUrl').value = state.marksync_api_url || '';
   document.getElementById('marksyncToken').value = state.marksync_token || '';
   document.getElementById('autoSync').checked = state.autoSync || false;
 
-  // Save
-  document.getElementById('saveButton').addEventListener('click', async () => {
-    const apiUrl = document.getElementById('marksyncApiUrl').value.trim();
-    const token = document.getElementById('marksyncToken').value.trim();
-    if (!apiUrl) return showStatus('请输入 API URL', 'error');
-    if (!token) return showStatus('请输入 API Token', 'error');
-    if (!token.startsWith('mks_')) return showStatus('Token 格式错误，应以 mks_ 开头', 'error');
-
-    chrome.storage.sync.set(
-      {
-        marksync_api_url: apiUrl.replace(/\/$/, ''),
-        marksync_token: token,
-        autoSync: document.getElementById('autoSync').checked,
-        backend_type: 'marksync', // legacy compatibility
-      },
-      () => showStatus('设置已保存', 'success')
-    );
+  // Eye toggle
+  document.getElementById('toggleTokenBtn').addEventListener('click', () => {
+    const input = document.getElementById('marksyncToken');
+    input.type = input.type === 'password' ? 'text' : 'password';
   });
 
-  // Test connection
-  document.getElementById('testConnBtn').addEventListener('click', async () => {
-    const btn = document.getElementById('testConnBtn');
-    const result = document.getElementById('testResult');
-    btn.disabled = true;
-    result.className = 'test-result';
-    result.textContent = '测试中...';
-    result.style.display = 'block';
-
-    const apiUrl = document.getElementById('marksyncApiUrl').value.trim();
-    const token = document.getElementById('marksyncToken').value.trim();
-
-    if (!apiUrl || !token) {
-      result.className = 'test-result err';
-      result.textContent = '请先填写 API URL 和 Token';
-      btn.disabled = false;
-      return;
-    }
-
-    await new Promise((r) =>
-      chrome.storage.sync.set(
-        {
-          marksync_api_url: apiUrl.replace(/\/$/, ''),
-          marksync_token: token,
-          backend_type: 'marksync',
-        },
-        r
-      )
-    );
-
-    try {
-      const res = await testConnection();
-      result.className = 'test-result ok';
-      result.textContent = '✅ ' + res.message;
-    } catch (err) {
-      result.className = 'test-result err';
-      result.textContent = '❌ ' + (err.message || '连接失败');
-    } finally {
-      btn.disabled = false;
-    }
-  });
+  document.getElementById('testConnBtn').addEventListener('click', handleTestConnection);
+  document.getElementById('saveButton').addEventListener('click', handleSave);
 });
-
-function showStatus(message, type) {
-  const status = document.getElementById('status');
-  status.textContent = message;
-  status.className = type;
-  setTimeout(() => {
-    status.textContent = '';
-    status.className = '';
-  }, 3000);
-}

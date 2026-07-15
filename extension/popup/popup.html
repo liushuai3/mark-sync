@@ -9,22 +9,43 @@
     <div class="header">
       <h2>书签同步助手</h2>
       <div class="header-buttons">
-        <button id="remoteBookmarkButton" class="icon-button" title="远程书签管理">🔍</button>
+        <button id="remoteBookmarkButton" class="icon-button" title="管理台">📚</button>
         <button id="helpButton" class="icon-button" title="使用说明">❔</button>
         <button id="settingsButton" class="icon-button" title="设置">⚙️</button>
       </div>
     </div>
-    <div class="button-group">
-      <button id="uploadBookmarks">本地同步到云端</button>
-      <button id="downloadBookmarks">云端同步到本地</button>
-      <button id="forceUpload" class="warning-button">强制本地同步到云端</button>
-      <button id="clearLocal">清除本地书签</button>
-    </div>
-    <div id="status"></div>
-    
 
-    
+    <!-- 未配置提示 -->
+    <div id="unconfiguredPanel" class="unconfigured" style="display:none;">
+      <p>请先配置 API URL 与 Token</p>
+      <button id="goSettingsButton">前往设置</button>
+    </div>
+
+    <!-- 主界面 -->
+    <div id="mainPanel">
+      <div class="button-group">
+        <button id="syncNowBtn">立即同步</button>
+        <button id="forceUploadBtn" class="warning-button">强制上传（覆盖云端）</button>
+      </div>
+
+      <div class="status-panel">
+        <div class="status-row">
+          <span class="status-label">最后同步</span>
+          <span id="lastSyncLabel" class="status-value">-</span>
+        </div>
+        <div class="status-row">
+          <span class="status-label">书签数</span>
+          <span id="bookmarkCountLabel" class="status-value">-</span>
+        </div>
+        <div class="status-row" id="conflictsRow" style="display:none;">
+          <span class="status-label">⚠️ 冲突</span>
+          <span id="conflictsLabel" class="status-value warning">0</span>
+        </div>
+      </div>
+
+      <div id="toast" class="toast"></div>
+    </div>
   </div>
-  <script type="module" src="popup.js"></script>
+  <script src="popup.js"></script>
 </body>
 </html>

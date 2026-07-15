@@ -10,8 +10,13 @@
     "alarms"
   ],
   "host_permissions": [
+    "https://marksync.zcoolq.cn/*",
     "http://localhost/*",
-    "https://*/*"
+    "http://127.0.0.1/*"
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://*/*"
   ],
   "background": {
     "service_worker": "background/background.js",
