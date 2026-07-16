@@ -29,17 +29,14 @@
 
     <!-- 主界面 -->
     <div id="mainPanel">
-      <!-- 同步状态指示器 -->
-      <div class="sync-status" id="syncStatusRow">
-        <span class="sync-dot" id="syncDot"></span>
-        <span class="sync-status-label" id="syncStatusLabel">检查状态…</span>
-        <span class="sync-status-time" id="syncStatusTime"></span>
-      </div>
-
       <div class="status-panel">
         <div class="status-row" id="usernameRow" style="display:none;">
           <span class="status-label">用户</span>
           <span id="usernameLabel" class="status-value"></span>
+        </div>
+        <div class="status-row">
+          <span class="status-label">服务状态</span>
+          <span id="healthLabel" class="status-value"></span>
         </div>
         <div class="status-row">
           <span class="status-label">最后同步</span>

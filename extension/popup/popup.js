@@ -28,50 +28,23 @@ function getConfig() {
 }
 
 // ─── 同步状态指示器 ──────────────────────────
-const INDICATOR_LABELS = {
-  healthy: ['● 在线', 'healthy'],
-  syncing: ['⟳ 同步中', 'syncing'],
-  error: ['✕ 连接异常', 'error'],
-  idle: ['○ 待同步', 'idle'],
-};
-
-function updateSyncIndicator(state) {
-  const dot = document.getElementById('syncDot');
-  const label = document.getElementById('syncStatusLabel');
-  const time = document.getElementById('syncStatusTime');
-  const row = document.getElementById('syncStatusRow');
-  if (!dot || !label || !row) return;
-
-  const lastSync = state.last_sync_at || state.lastSyncAt || 0;
-  const lastError = state.last_error;
-  const now = Date.now();
-
-  let key;
-  if (lastError && now - (state.last_sync_at || 0) > 60000) {
-    key = 'error';
-  } else if (lastSync && now - lastSync < 600000) {
-    key = 'healthy';
-  } else if (lastSync) {
-    key = 'idle';
-  } else {
-    key = 'idle';
-  }
-
-  const [lbl, cls] = INDICATOR_LABELS[key];
-  dot.className = 'sync-dot ' + cls;
-  label.textContent = lbl;
-  time.textContent = lastSync ? formatRelativeTime(lastSync) : '';
-}
-
-// ─── 同步中状态 ──────────────────────────
-function setSyncingLabel(syncing) {
-  const dot = document.getElementById('syncDot');
-  const label = document.getElementById('syncStatusLabel');
-  if (dot && label && syncing) {
-    dot.className = 'sync-dot syncing';
-    label.textContent = '⟳ 同步中';
-  } else if (dot && label && !syncing) {
-    // will be refreshed by renderState
+// removed, now using simple health check below
+// ─── 后端健康检查 ──────────────────────────
+async function checkHealth() {
+  const val = document.getElementById('healthLabel');
+  if (!val) return;
+  try {
+    const cfg = await getConfig();
+    const apiUrl = (cfg.marksync_api_url || '').trim();
+    if (!apiUrl) {
+      val.textContent = '未配置';
+      return;
+    }
+    const r = await fetch(apiUrl.replace(/\/+$/, '') + '/health', { signal: AbortSignal.timeout(5000) });
+    if (r.ok) val.textContent = '● 在线';
+    else val.textContent = '✕ 离线';
+  } catch {
+    val.textContent = '✕ 离线';
   }
 }
 
@@ -112,7 +85,6 @@ function setLoading(button, on) {
   if (on) {
     button.classList.add('syncing');
     button.disabled = true;
-    setSyncingLabel(true);
   } else {
     button.classList.remove('syncing');
     button.disabled = false;
@@ -159,7 +131,6 @@ function renderState(payload) {
     row.style.display = 'none';
   }
 
-  updateSyncIndicator(state);
 }
 
 async function refreshState() {
@@ -242,5 +213,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   document.getElementById('syncNowBtn').addEventListener('click', handleSyncNow);
 
+  checkHealth();
   await refreshState();
 });

@@ -56,65 +56,6 @@
   color: #202124;
 }
 
-/* ── sync status indicator ─────────────────────── */
-.sync-status {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 8px 12px;
-  margin-bottom: 10px;
-  background: #fff;
-  border: 1px solid #e3e5e8;
-  border-radius: 10px;
-  font-size: 12px;
-  color: #5f6368;
-  transition: border-color 0.2s ease;
-}
-
-.sync-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  transition: background-color 0.3s ease;
-}
-
-.sync-dot.healthy {
-  background-color: #34a853;
-  box-shadow: 0 0 0 2px rgba(52, 168, 83, 0.15);
-}
-
-.sync-dot.syncing {
-  background-color: #fbbc04;
-  box-shadow: 0 0 0 2px rgba(251, 188, 4, 0.2);
-  animation: pulse 1.2s ease-in-out infinite;
-}
-
-.sync-dot.error {
-  background-color: #ea4335;
-  box-shadow: 0 0 0 2px rgba(234, 67, 53, 0.15);
-}
-
-.sync-dot.idle {
-  background-color: #dadce0;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
-}
-
-.sync-status-label {
-  font-size: 12px;
-  color: #5f6368;
-}
-
-.sync-status-time {
-  margin-left: auto;
-  font-size: 11px;
-  color: #9aa0a6;
-}
-
 /* ── status panel ──────────────────────────────── */
 .status-panel {
   background: #fff;
