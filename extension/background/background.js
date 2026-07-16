@@ -345,7 +345,23 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
         case 'GET_STATE': {
           const state = await SyncState.get();
           const size = await IdMapStore.size();
-          sendResponse({ ok: true, state, idMapSize: size });
+          // Also fetch the username from the API for displaying in the popup.
+          let username = null;
+          try {
+            const { apiUrl, token } = await getConfig();
+            if (apiUrl && token) {
+              const r = await fetch(apiUrl + '/auth/me', {
+                headers: { Authorization: 'Bearer ' + token },
+              });
+              if (r.ok) {
+                const j = await r.json();
+                username = (j.data && (j.data.username || j.data.email)) || (j.username || j.email) || null;
+              }
+            }
+          } catch {
+            // non-fatal; username stays null
+          }
+          sendResponse({ ok: true, state, idMapSize: size, username });
           break;
         }
 

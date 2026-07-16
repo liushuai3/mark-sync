@@ -92,6 +92,15 @@ function renderState(payload) {
   document.getElementById('lastSyncLabel').textContent = formatRelativeTime(lastSync);
   document.getElementById('bookmarkCountLabel').textContent = String(bookmarkCount);
 
+  // Show username if available
+  const username = payload && payload.username;
+  const usernameRow = document.getElementById('usernameRow');
+  const usernameLabel = document.getElementById('usernameLabel');
+  if (username && usernameRow && usernameLabel) {
+    usernameRow.style.display = '';
+    usernameLabel.textContent = username;
+  }
+
   const row = document.getElementById('conflictsRow');
   const lbl = document.getElementById('conflictsLabel');
   if (Number(conflicts) > 0) {
