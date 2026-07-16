@@ -177,12 +177,25 @@ async function handleSave() {
     // 3. Clean legacy
     await cleanupLegacyKeys();
 
-    // 4. Trigger initial merge
-    showStatus('配置已保存，正在合并书签...', 'success', 8000);
+    // 4. Trigger initial merge and show its result
+    showStatus('正在合并书签…', 'success', 60_000);
     try {
-      await sendMessage({ type: 'INITIAL_MERGE' });
+      const mergeResp = await sendMessage({ type: 'INITIAL_MERGE' });
+      if (mergeResp && mergeResp.ok) {
+        const a = mergeResp.added || 0;
+        const r = mergeResp.remotePulled || 0;
+        const m = mergeResp.matched || 0;
+        showStatus(`✅ 合并完成：拉取 ${r} · 上传 ${a} · 匹配 ${m}`, 'success', 5000);
+      } else if (mergeResp && mergeResp.error) {
+        showStatus(`❌ 合并失败：${mergeResp.error}`, 'error', 5000);
+      } else if (mergeResp && mergeResp.skipped) {
+        showStatus('⚠️ 合并被跳过（可能是背景任务冲突）', 'warn', 5000);
+      } else {
+        showStatus('✅ 配置已保存', 'success', 3000);
+      }
     } catch (err) {
       console.warn('INITIAL_MERGE 触发失败', err);
+      showStatus(`❌ 合并请求失败：${err.message}`, 'error', 5000);
     }
   } catch (err) {
     showStatus(`保存失败：${err.message || err}`, 'error', 5000);
