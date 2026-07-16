@@ -6,211 +6,322 @@
   <title>MarkSync 使用说明</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; line-height: 1.7; }
-    .container { max-width: 800px; margin: 0 auto; padding: 24px 16px; }
-    h1 { font-size: 24px; margin-bottom: 8px; color: #222; }
-    h2 { font-size: 18px; margin: 24px 0 12px; padding-bottom: 6px; border-bottom: 2px solid #2196F3; color: #2196F3; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif; background: #f0f2f5; color: #333; line-height: 1.7; }
+    .container { max-width: 800px; margin: 0 auto; padding: 32px 20px 48px; }
+
+    /* header */
+    .header { text-align: center; padding: 36px 0 24px; }
+    .header .logo-img { width: 64px; height: 64px; border-radius: 14px; margin-bottom: 12px; }
+    .header h1 { font-size: 26px; font-weight: 700; color: #1d1d1f; }
+    .header .subtitle { color: #8e8ea0; font-size: 14px; margin-top: 4px; }
+
+    /* toc */
+    .toc { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 24px; }
+    .toc a { display: inline-flex; align-items: center; gap: 4px; padding: 8px 16px; background: #fff; border-radius: 10px; color: #333; text-decoration: none; font-size: 13px; font-weight: 500; box-shadow: 0 1px 3px rgba(0,0,0,0.06); transition: box-shadow 0.15s, transform 0.15s; }
+    .toc a:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.1); transform: translateY(-1px); }
+
+    h2 { font-size: 19px; margin: 32px 0 16px; display: flex; align-items: center; gap: 8px; color: #1d1d1f; }
+    h2::after { content: ''; flex: 1; height: 1px; background: #e0e2e5; margin-left: 8px; }
     h3 { font-size: 15px; margin: 16px 0 8px; color: #444; }
+
     p, li { font-size: 14px; color: #555; margin-bottom: 8px; }
-    ul, ol { margin-left: 20px; }
-    code { background: #e3f2fd; padding: 2px 6px; border-radius: 3px; font-size: 13px; color: #1565C0; }
-    .step { display: flex; gap: 12px; margin-bottom: 16px; padding: 12px; background: white; border-radius: 8px; border-left: 3px solid #2196F3; }
-    .step-num { flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%; background: #2196F3; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; }
-    .step-content { flex: 1; }
-    .btn { display: inline-block; margin: 8px 4px 0 0; padding: 6px 14px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; text-decoration: none; }
-    .btn:hover { background: #1976D2; }
-    .btn.secondary { background: #666; }
-    .btn.secondary:hover { background: #444; }
-    .faq { margin-top: 16px; }
-    .faq-item { background: white; border-radius: 8px; margin-bottom: 8px; overflow: hidden; }
-    .faq-q { padding: 12px 16px; font-weight: 600; cursor: pointer; font-size: 14px; background: #fafafa; }
-    .faq-a { padding: 0 16px 12px; font-size: 13px; color: #666; display: none; }
+    ul, ol { margin-left: 20px; margin-bottom: 12px; }
+    code { background: #e8edf3; padding: 2px 7px; border-radius: 4px; font-size: 13px; color: #1565C0; font-family: 'SFMono-Regular', Consolas, monospace; }
+    strong { color: #1d1d1f; }
+
+    .step { display: flex; gap: 14px; margin-bottom: 14px; padding: 14px 16px; background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); border-left: 3px solid #34a853; }
+    .step-num { flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%; background: #34a853; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; }
+    .step-content { flex: 1; min-width: 0; }
+    .step-content strong { display: block; margin-bottom: 4px; }
+    .step-content p { margin-bottom: 4px; }
+
+    .btn { display: inline-flex; align-items: center; margin: 4px 4px 0 0; padding: 7px 16px; background: #34a853; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500; text-decoration: none; transition: background 0.15s; }
+    .btn:hover { background: #2d9249; }
+    .btn.sec { background: #5f6368; }
+    .btn.sec:hover { background: #444; }
+
+    /* FAQ */
+    .faq { margin-top: 8px; }
+    .faq-item { background: #fff; border-radius: 10px; margin-bottom: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.04); border: 1px solid #e8eaed; }
+    .faq-q { padding: 12px 16px; font-weight: 600; cursor: pointer; font-size: 14px; display: flex; justify-content: space-between; align-items: center; user-select: none; }
+    .faq-q::after { content: '+'; font-size: 18px; color: #9aa0a6; transition: transform 0.2s; }
+    .faq-item.open .faq-q::after { content: '−'; }
+    .faq-a { padding: 0 16px 14px; font-size: 13px; color: #666; display: none; line-height: 1.6; }
     .faq-item.open .faq-a { display: block; }
-    .header { text-align: center; padding: 16px 0; }
-    .header .logo { font-size: 40px; margin-bottom: 8px; }
-    .header p { color: #888; font-size: 13px; }
-    #version-display { color: #2196F3; font-weight: 600; }
+
+    /* badge */
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 5px; font-size: 11px; font-weight: 600; margin-right: 4px; }
+    .badge.green { background: #e6f4ea; color: #1e8e3e; }
+    .badge.blue { background: #e8f0fe; color: #1967d2; }
+    .badge.orange { background: #fef7e0; color: #e37400; }
+
+    /* tip box */
+    .tip { background: #e8f0fe; border-radius: 10px; padding: 12px 16px; margin: 12px 0; font-size: 13px; color: #1967d2; border-left: 3px solid #1967d2; }
+    .warn { background: #fef7e0; border-radius: 10px; padding: 12px 16px; margin: 12px 0; font-size: 13px; color: #e37400; border-left: 3px solid #e37400; }
+
+    /* feature cards */
+    .features { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+    .feature-card { background: #fff; border-radius: 10px; padding: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); border: 1px solid #e8eaed; }
+    .feature-card .icon { font-size: 24px; margin-bottom: 6px; }
+    .feature-card h4 { font-size: 14px; margin-bottom: 4px; color: #1d1d1f; }
+    .feature-card p { font-size: 12px; color: #666; margin: 0; }
+
+    footer { text-align: center; padding: 32px 0 8px; color: #9aa0a6; font-size: 12px; }
+    footer a { color: #34a853; text-decoration: none; }
+
+    @media (max-width: 500px) { .features { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <div class="logo">📎</div>
+      <img src="/logo.png" alt="MarkSync" class="logo-img">
       <h1>MarkSync 书签同步</h1>
-      <p id="version-line">加载中...</p>
+      <p class="subtitle">在不同设备间同步浏览器书签 · 自托管, 即插即用</p>
     </div>
 
     <div class="toc">
-      <strong>目录</strong>
-      <a href="#install">📥 安装插件</a>
-      <a href="#config">⚙️ 配置 API 连接</a>
-      <a href="#sync">🔄 同步指南</a>
-      <a href="#faq">❓ 常见问题</a>
+      <a href="#features">✨ 功能概览</a>
+      <a href="#install">📦 安装</a>
+      <a href="#config">⚙️ 配置</a>
+      <a href="#sync">🔄 同步</a>
+      <a href="#multi">💻 多设备</a>
+      <a href="#faq">❓ FAQ</a>
     </div>
 
-    <h2 id="install">📥 安装插件</h2>
+    <h2 id="features">✨ 功能概览</h2>
+    <div class="features">
+      <div class="feature-card">
+        <div class="icon">🔄</div>
+        <h4>增量同步</h4>
+        <p>双向增量同步, 仅传输变更, 省时省流量, 冲突自动处理</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">📊</div>
+        <h4>状态面板</h4>
+        <p>弹窗直观显示: 用户名 · 服务状态 · 本地/远程书签数 · 最后同步时间</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">💻</div>
+        <h4>多设备支持</h4>
+        <p>Chrome / Edge / Firefox 任意组合, 一次配置, 自动同步</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">🔁</div>
+        <h4>首次合并</h4>
+        <p>新设备首次同步自动执行 initialMerge, 智能匹配去重</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">🌐</div>
+        <h4>Web 管理台</h4>
+        <p>在线查看 / 编辑 / 搜索书签, 管理 Token, 查看同步日志</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">🛡️</div>
+        <h4>自托管安全</h4>
+        <p>Token AES-256 加密存储, HTTPS 传输, 数据完全由你掌控</p>
+      </div>
+    </div>
+
+    <h2 id="install">📦 安装插件</h2>
     <div class="step">
       <div class="step-num">1</div>
       <div class="step-content">
-        <strong>下载插件</strong>
-        <p>在 Web 管理台的 <strong>「浏览器插件」</strong> 页面下载最新插件包</p>
-        <p>或者直接去 <a class="btn" id="downloadBtn" href="/api/version" target="_blank">下载最新版</a></p>
-        <script>
-          // 动态拼接当前版本号，避免写死链接
-          (async () => {
-            try {
-              const link = document.getElementById('downloadBtn');
-              if (!link) return;
-              const r = await fetch('/health');
-              const j = await r.json();
-              const v = j && j.data && j.data.version;
-              if (v) link.href = `/downloads/marksync-extension-v${v}.zip`;
-            } catch {}
-          })();
-        </script>
+        <strong>下载插件包</strong>
+        <p>从 <a href="https://marksync.zcoolq.cn">管理台「浏览器插件」</a> 页面下载最新版 zip</p>
+        <p>或直接点击: <a class="btn" id="downloadBtn" href="/downloads/marksync-extension-v3.1.2.zip" target="_blank">下载扩展 v3.1.2</a></p>
       </div>
     </div>
     <div class="step">
       <div class="step-num">2</div>
       <div class="step-content">
-        <strong>解压</strong>
-        <p>将 zip 包解压到任意文件夹，记住这个位置。</p>
+        <strong>解压到本地</strong>
+        <p>将 zip 解压到任意文件夹, 请记住这个位置。</p>
       </div>
     </div>
     <div class="step">
       <div class="step-num">3</div>
       <div class="step-content">
         <strong>加载扩展</strong>
-        <p>浏览器地址栏输入 <code>chrome://extensions</code>（Edge 用 <code>edge://extensions</code>）</p>
-        <p>打开右上角 <strong>「开发者模式」</strong> 开关，点击 <strong>「加载已解压的扩展」</strong>，选择解压后的文件夹。</p>
+        <p>Chrome: <code>chrome://extensions</code> · Edge: <code>edge://extensions</code> · Firefox: <code>about:debugging#/runtime/this-firefox</code></p>
+        <p>打开右上角 <strong>「开发者模式」</strong>, 点击 <strong>「加载已解压的扩展」</strong>, 选择解压文件夹。</p>
       </div>
     </div>
     <div class="step">
       <div class="step-num">4</div>
       <div class="step-content">
-        <strong>配置 API 连接</strong>
-        <p>右键扩展工具栏图标 → 「选项」或「设置」，填入 API URL 和 Token。</p>
+        <strong>获得 Token</strong>
+        <p>登录 <a href="https://marksync.zcoolq.cn">管理台</a> → 「API Token」→ 「创建新 Token」, 复制 <code>mks_xxx</code> 格式密钥。</p>
       </div>
     </div>
 
-    <h2 id="config">⚙️ 配置 API 连接</h2>
+    <h2 id="config">⚙️ 配置扩展</h2>
     <div class="step">
       <div class="step-num">1</div>
       <div class="step-content">
-        <strong>获取 API URL</strong>
-        <p>你的服务地址：<code>https://marksync.zcoolq.cn/api</code></p>
-        <p>如果部署在本地：<code>http://localhost:3000/api</code></p>
+        <strong>打开设置</strong>
+        <p>右键工具栏 MarkSync 图标 → 「选项」, 或点⚙️齿轮图标。</p>
       </div>
     </div>
     <div class="step">
       <div class="step-num">2</div>
       <div class="step-content">
-        <strong>创建 API Token</strong>
-        <p>登录 Web 管理台 → 「API Token」页面 → 点击「创建新 Token」</p>
-        <p>创建后复制 <code>mks_xxx</code> 格式的 Token（可随时在列表中点 👁️ 查看）</p>
+        <strong>填写信息</strong>
+        <p><strong>API URL</strong> 默认已填 <code>https://marksync.zcoolq.cn/api</code></p>
+        <p>自建后端可改为 <code>http://your-server:port/api</code></p>
+        <p><strong>Token</strong> 填入上一步复制的 <code>mks_xxx</code> 密钥</p>
       </div>
     </div>
     <div class="step">
       <div class="step-num">3</div>
       <div class="step-content">
-        <strong>测试连接</strong>
-        <p>在扩展设置页面填入 URL 和 Token 后，点击「测试连接」验证。</p>
+        <strong>保存配置</strong>
+        <p>点击「保存」, 自动执行首次合并, 状态栏显示合并结果。</p>
+        <p>之后每次保存会触发一次常规同步。</p>
       </div>
     </div>
 
-    <h2 id="sync">🔄 同步指南</h2>
+    <div class="tip">💡 API URL 默认指向 <code>marksync.zcoolq.cn</code>, 大多数用户无需修改, 直接填 Token 即可。</div>
+
+    <h2 id="sync">🔄 如何使用</h2>
     <div class="step">
-      <div class="step-num">📤</div>
+      <div class="step-num">▶</div>
       <div class="step-content">
-        <strong>本地同步到云端</strong>
-        <p>将浏览器当前的书签上传到服务器。同一书签不会重复上传。</p>
-      </div>
-    </div>
-    <div class="step">
-      <div class="step-num">📥</div>
-      <div class="step-content">
-        <strong>云端同步到本地</strong>
-        <p>将服务器上的书签下载到当前浏览器。</p>
-      </div>
-    </div>
-    <div class="step">
-      <div class="step-num">⚡</div>
-      <div class="step-content">
-        <strong>强制同步</strong>
-        <p>用本地书签完全覆盖云端（不可恢复）。</p>
+        <strong>手动同步</strong>
+        <p>打开扩展弹窗, 点击底部绿色 <strong>「立即同步」</strong> 按钮。</p>
+        <p>同步中按钮变黄色并旋转, 完成后 Toast 显示新增 / 修改 / 删除数量。</p>
       </div>
     </div>
     <div class="step">
       <div class="step-num">⏰</div>
       <div class="step-content">
         <strong>自动同步</strong>
-        <p>在扩展设置页面勾选「启用自动同步」，书签变更后自动上传到云端。</p>
+        <p>后台每 5 分钟自动执行一次同步, 无需手动操作。</p>
+        <p>工具栏图标在同步中显示蓝色 <code>⋯</code>, 同步完成短暂显示 <code>✓</code>。</p>
       </div>
     </div>
+    <div class="step">
+      <div class="step-num">📊</div>
+      <div class="step-content">
+        <strong>查看状态</strong>
+        <p>打开弹窗可查看:</p>
+        <ul>
+          <li><strong>用户</strong> — 当前登录用户</li>
+          <li><strong>服务状态</strong> — ● 在线 / ✕ 离线 (自动检测后端健康)</li>
+          <li><strong>最后同步</strong> — 最近一次同步时间 (超过 24h 显示完整日期时间)</li>
+          <li><strong>本地书签</strong> — 浏览器中实际的书签数量</li>
+          <li><strong>远程书签</strong> — 云端存储的书签数量</li>
+        </ul>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">🌐</div>
+      <div class="step-content">
+        <strong>远程管理</strong>
+        <p>点击弹窗顶部 📖 书本图标打开管理台, 在线查看/搜索/编辑云端书签。</p>
+      </div>
+    </div>
+
+    <div class="warn">⚠️ 首次同步会执行「合并」而非「覆盖」, 智能匹配去重, 不会丢失数据。</div>
+
+    <h2 id="multi">💻 多设备同步</h2>
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <strong>第二台设备</strong>
+        <p>在新浏览器上按「安装」→「配置」流程再来一次。</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <strong>首次合并</strong>
+        <p>新设备保存配置后自动执行 initialMerge, 本地与云端书签智能匹配。</p>
+        <p>匹配上的书签建立映射关系; 本地独有的推上去; 云端独有的拉下来。</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <strong>日常同步</strong>
+        <p>之后每 5 分钟自动增量同步, 可以手动点「立即同步」触发。</p>
+      </div>
+    </div>
+
+    <div class="tip">💡 多个浏览器使用同一个 <strong>同一个 Token</strong> 即可共享书签数据。不同用户请创建对应 Token。</div>
 
     <h2 id="faq">❓ 常见问题</h2>
     <div class="faq">
       <div class="faq-item open">
-        <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">插件无法连接？</div>
+        <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">插件无法连接或显示「✕ 离线」</div>
         <div class="faq-a">
           <ul>
-            <li>确认 API URL 以 <code>/api</code> 结尾</li>
-            <li>确认 Token 未过期且在「API Token」页面未撤销</li>
-            <li>如果使用 HTTPS，确保证书有效</li>
-            <li>Firefox 用户请打开 <code>about:debugging#/runtime/this-firefox</code> 加载</li>
+            <li>确认 API URL 以 <code>/api</code> 结尾, 如 <code>https://marksync.zcoolq.cn/api</code></li>
+            <li>确认 Token 未过期且在管理台「API Token」页面状态正常</li>
+            <li>如果使用自定义 HTTPS, 确保证书有效</li>
+            <li>查看管理台同步日志确认服务器端是否有错误</li>
           </ul>
         </div>
       </div>
       <div class="faq-item">
-        <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">如何备份书签？</div>
+        <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">本地书签和远程书签数不一致</div>
         <div class="faq-a">
-          <p>登录 Web 管理台 → 「备份与恢复」页面，可以设置自动备份或手动创建备份，随时可恢复。</p>
-        </div>
-      </div>
-      <div class="faq-item">
-        <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">数据安全性如何？</div>
-        <div class="faq-a">
-          <p>所有数据通过 HTTPS 加密传输，Token 在服务端使用 AES-256 加密存储。这是自托管方案，完全由你自己控制数据。</p>
+          <p><strong>本地书签</strong> 是当前浏览器中实际的书签数量（含 chrome 根文件夹）。</p>
+          <p><strong>远程书签</strong> 是同步到服务器上的活跃书签数量（不含已删除的记录）。</p>
+          <p>不一致正常, 点一次「立即同步」即会双向对齐。</p>
         </div>
       </div>
       <div class="faq-item">
         <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">支持哪些浏览器？</div>
         <div class="faq-a">
-          <p>支持 Chrome、Edge、Firefox（121+）。基于 Manifest V3。</p>
-          <p>Firefox 安装方式：打开 <code>about:debugging#/runtime/this-firefox</code> → 临时加载附加组件 → 选择解压后的 manifest.json</p>
+          <p>Chrome · Edge · Firefox 121+（基于 Manifest V3）。</p>
+          <p>Firefox 安装后需在 <code>about:debugging#/runtime/this-firefox</code> → 临时加载附加组件。</p>
         </div>
       </div>
       <div class="faq-item">
-        <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">远程书签管理怎么用？</div>
+        <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">如何备份书签？</div>
         <div class="faq-a">
-          <p>点击扩展弹窗的 🔍 按钮会打开 Web 管理台，登录后可在「书签管理」页面查看和编辑所有云端书签。</p>
+          <p>登录 <a href="https://marksync.zcoolq.cn">管理台</a> → 「备份与恢复」页面, 可设置自动备份或手动创建备份随时恢复。</p>
+        </div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">同步冲突怎么处理？</div>
+        <div class="faq-a">
+          <p>采用 LWW（Last-Writer-Wins）策略, 以较晚修改的版本为准。冲突不会导致数据丢失, 冲突数会显示在弹窗状态面板中。</p>
+        </div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">数据安全性如何？</div>
+        <div class="faq-a">
+          <p>Token 在服务端使用 AES-256-GCM 加密存储（可随时在管理台查看/撤销）。</p>
+          <p>所有 API 通信通过 HTTPS 加密。全部数据由你自己掌控。</p>
+        </div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">如何更新插件？</div>
+        <div class="faq-a">
+          <p>重新下载最新版 zip → 解压覆盖旧文件夹 → <code>chrome://extensions</code> 点 🔄 重新加载。</p>
+          <p>配置和数据不会丢失, 存储在 Chrome 同步存储中。</p>
+        </div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">同步日志保留多久？</div>
+        <div class="faq-a">
+          <p>云端自动保留最近 10 天的同步日志, 超过自动清理。可在管理台「统计」页面查看。</p>
+        </div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">能离线使用吗？</div>
+        <div class="faq-a">
+          <p>扩展弹窗打开时会自动检测后端健康状态。当后端不可用时, 扩展不会操作本地书签, 待恢复连接后下一次同步自动对齐。</p>
         </div>
       </div>
     </div>
 
-    <div style="text-align:center; padding: 32px 0 16px; color: #999; font-size: 12px;">
-      <p>MarkSync · 轻量级书签同步系统</p>
-      <p style="margin-top:4px"><a href="https://marksync.zcoolq.cn" style="color:#2196F3; text-decoration:none;">https://marksync.zcoolq.cn</a></p>
-    </div>
+    <footer>
+      <p>MarkSync · 轻量级书签同步系统 · <span id="footerVersion">v3.1.2</span></p>
+      <p><a href="https://marksync.zcoolq.cn">https://marksync.zcoolq.cn</a></p>
+    </footer>
   </div>
-
-  <script>
-    // Dynamically get version from manifest and inject into page
-    try {
-      // Try to fetch version from /api/settings or just read from a known endpoint
-      var vEl = document.getElementById('version-line');
-      var dEl = document.getElementById('downloadBtn');
-
-      // Fetch health endpoint which returns version info
-      fetch('/api/auth/me').then(function(r) { return r.json(); }).then(function(data) {
-        if (vEl) vEl.textContent = '在不同设备间同步浏览器书签';
-      }).catch(function() {
-        // Offline or no auth, just show generic text
-        if (vEl) vEl.textContent = '在不同设备间同步浏览器书签';
-      });
-    } catch(e) {
-      // Fallback
-    }
-  </script>
 </body>
 </html>

@@ -2,9 +2,7 @@
   <div class="login-container">
     <n-card class="login-card" :bordered="false">
       <div class="brand">
-        <n-icon size="48" color="#2196F3">
-          <BookmarkOutline />
-        </n-icon>
+        <img src="/logo.png" alt="MarkSync" style="width:48px;height:48px;border-radius:8px">
         <h1>MarkSync</h1>
         <p class="tagline">轻量级书签同步系统</p>
       </div>
