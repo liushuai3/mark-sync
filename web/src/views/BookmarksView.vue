@@ -78,7 +78,7 @@
 import { ref, onMounted, h } from 'vue';
 import { NButton, NIcon, NTag, NSpace } from 'naive-ui';
 import { useMessage, useDialog } from '../lib/naive-api.js';
-import { SearchOutline, PencilOutline, TrashOutline, OpenOutline, FolderOutline } from '@vicons/ionicons5';
+import { SearchOutline, PencilOutline, TrashOutline, OpenOutline, FolderOutline, GlobeOutline } from '@vicons/ionicons5';
 import { bookmarksApi } from '../api/index.js';
 
 const message = useMessage();
@@ -117,16 +117,17 @@ const columns = [
     width: 80,
     render: (row) => {
       if (row.type === 'folder') {
-        return h(NIcon, { color: '#FF9800' }, { default: () => h(FolderOutline) });
+        return h(NIcon, { size: 20, color: '#FF9800' }, { default: () => h(FolderOutline) });
       }
-      return row.url
-        ? h('img', {
-            src: `https://www.google.com/s2/favicons?domain=${new URL(row.url).hostname}&sz=32`,
-            style: 'width:16px;height:16px;vertical-align:middle',
-            onError: (e) => (e.target.style.display = 'none'),
-          })
-        : '';
+      return h(NIcon, { size: 18, color: '#409EFF' }, { default: () => h(GlobeOutline) });
     },
+  },
+  {
+    title: '路径',
+    key: 'path',
+    width: 220,
+    ellipsis: { tooltip: true },
+    render: (row) => row.path || rootLabel(row.root),
   },
   { title: '名称', key: 'name', ellipsis: { tooltip: true } },
   {
@@ -141,12 +142,6 @@ const columns = [
             row.url
           )
         : '-',
-  },
-  {
-    title: '所在根',
-    key: 'root',
-    width: 120,
-    render: (row) => rootLabel(row.root),
   },
   {
     title: '添加时间',

@@ -64,14 +64,27 @@ function setLoading(button, on) {
   }
 }
 
-function renderState(state) {
-  const lastSync = state && (state.lastSyncAt || state.lastSyncTime);
+function renderState(payload) {
+  const state = (payload && payload.state) || payload || {};
+  const lastSync =
+    state.last_sync_at ||
+    state.lastSyncAt ||
+    state.lastSyncTime ||
+    state.last_pulled_at ||
+    0;
   const bookmarkCount =
-    (state && (state.idMapSize ?? state.bookmarkCount)) ?? '-';
-  const conflicts = (state && (state.conflicts ?? state.conflictCount)) || 0;
+    (payload && (payload.idMapSize ?? payload.bookmarkCount)) ??
+    state.idMapSize ??
+    state.bookmarkCount ??
+    0;
+  const conflicts =
+    state.last_conflicts ??
+    state.conflicts ??
+    state.conflictCount ??
+    0;
 
   document.getElementById('lastSyncLabel').textContent = formatRelativeTime(lastSync);
-  document.getElementById('bookmarkCountLabel').textContent = bookmarkCount;
+  document.getElementById('bookmarkCountLabel').textContent = String(bookmarkCount);
 
   const row = document.getElementById('conflictsRow');
   const lbl = document.getElementById('conflictsLabel');
@@ -87,7 +100,7 @@ async function refreshState() {
   try {
     const resp = await sendMessage({ type: 'GET_STATE' });
     if (resp && resp.ok !== false) {
-      renderState(resp.state || resp);
+      renderState(resp);
     }
   } catch (err) {
     console.warn('GET_STATE 失败', err);

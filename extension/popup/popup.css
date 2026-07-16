@@ -142,21 +142,36 @@ button:hover {
 }
 
 .icon-button {
-  background: none;
-  border: none;
-  font-size: 20px;
+  background: #f1f3f4;
+  border: 1px solid #dadce0;
+  font-size: 18px;
+  color: #5f6368;
   cursor: pointer;
-  padding: 5px;
-  width: 30px;
-  height: 30px;
-  display: flex;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.icon-button svg {
+  display: block;
+  width: 18px;
+  height: 18px;
 }
 
 .icon-button:hover {
-  background-color: #f0f0f0;
+  background-color: #e8eaed;
+  border-color: #bdc1c6;
+  color: #202124;
+}
+
+.icon-button:hover:not(:disabled) {
+  transform: none;
+  box-shadow: none;
 }
 
 

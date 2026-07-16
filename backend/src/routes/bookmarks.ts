@@ -74,9 +74,54 @@ app.get('/', (c) => {
     )
     .all(...params, page_size, offset);
 
+  // Attach computed `path` (folder chain from root) for each item.
+  // v3.0 dropped the `path` column; the UI still wants a human-readable
+  // location, so we derive it on read.
+  const rootLabels: Record<string, string> = {
+    bookmark_bar: '书签栏',
+    other: '其他书签',
+    mobile: '移动书签',
+  };
+  const parentIds = Array.from(
+    new Set(items.map((it) => it.parent_id).filter((v): v is string => !!v))
+  );
+  const ancestors = new Map<string, { name: string; parent_id: string | null; root: string }>();
+  if (parentIds.length > 0) {
+    // Walk ancestors in batches; typical bookmark tree is shallow (<10)
+    let queue = parentIds.slice();
+    while (queue.length > 0) {
+      const missing = queue.filter((id) => !ancestors.has(id));
+      if (missing.length === 0) break;
+      const placeholders = missing.map(() => '?').join(',');
+      const rows = db
+        .prepare<any[], { id: string; name: string; parent_id: string | null; root: string }>(
+          `SELECT id, name, parent_id, root FROM bookmarks WHERE user_id = ? AND id IN (${placeholders})`
+        )
+        .all(user.id, ...missing);
+      for (const r of rows) {
+        ancestors.set(r.id, { name: r.name, parent_id: r.parent_id, root: r.root });
+      }
+      queue = rows.map((r) => r.parent_id).filter((v): v is string => !!v);
+    }
+  }
+  const pathFor = (item: Bookmark): string => {
+    const parts: string[] = [];
+    let cur = item.parent_id;
+    let guard = 0;
+    while (cur && guard++ < 64) {
+      const anc = ancestors.get(cur);
+      if (!anc) break;
+      parts.unshift(anc.name);
+      cur = anc.parent_id;
+    }
+    const rootName = rootLabels[item.root] || item.root;
+    return parts.length > 0 ? `${rootName} / ${parts.join(' / ')}` : rootName;
+  };
+  const itemsWithPath = items.map((it) => ({ ...it, path: pathFor(it) }));
+
   return c.json({
     ok: true,
-    data: { total, page, page_size, items },
+    data: { total, page, page_size, items: itemsWithPath },
   });
 });
 

@@ -19,6 +19,7 @@ import users from './routes/users.js';
 import security from './routes/security.js';
 import { startBackupScheduler } from './lib/backup.js';
 import { startTombstoneCleanup } from './lib/tombstone-cleanup.js';
+import { startSyncLogCleanup } from './lib/sync-log-cleanup.js';
 import { existsSync } from 'node:fs';
 
 const app = new Hono();
@@ -69,7 +70,7 @@ app.get('/health', (c) => {
     ok: true,
     data: {
       service: 'marksync-backend',
-      version: '1.0.0',
+      version: '3.0.0',
       uptime: process.uptime(),
       time: Date.now(),
     },
@@ -108,6 +109,7 @@ serve(
     logger.info(`MarkSync backend listening on http://0.0.0.0:${info.port} (${config.nodeEnv})`);
     startBackupScheduler();
     startTombstoneCleanup();
+    startSyncLogCleanup();
     ensureAdminUser().catch((err) => logger.error('ensureAdminUser failed', err));
   }
 );
