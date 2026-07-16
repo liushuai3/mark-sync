@@ -21,6 +21,7 @@ import {
   flattenLocalTree,
   getBookmarkTree,
   callApi,
+  discoverRoots,
 } from '../utils/bookmarkHelpers.js';
 import { uuid } from '../utils/uuid.js';
 
@@ -190,6 +191,7 @@ async function forceUpload() {
   try {
     // 1. Flatten the current local tree (folders + urls).
     const tree = await getBookmarkTree();
+    discoverRoots(tree);
     const localNodes = flattenLocalTree(tree);
 
     // 2. Give every node an id. Reuse existing cloud_id from the idMap
@@ -345,6 +347,17 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
         case 'GET_STATE': {
           const state = await SyncState.get();
           const size = await IdMapStore.size();
+          // Count actual local bookmarks from the Chrome tree (not idMap entries),
+          // so deleting a bookmark in Chrome is reflected immediately.
+          let localCount = 0;
+          try {
+            const tree = await getBookmarkTree();
+            discoverRoots(tree);
+            const localNodes = flattenLocalTree(tree);
+            localCount = localNodes.length;
+          } catch {
+            localCount = size; // fallback to idMap count
+          }
           // Also fetch the username from the API for displaying in the popup.
           let username = null;
           let remoteCount = null;
@@ -371,7 +384,7 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
           } catch (err) {
             console.warn('[background] GET_STATE fetch failed:', err && err.message || err);
           }
-          sendResponse({ ok: true, state, idMapSize: size, username, remoteCount });
+          sendResponse({ ok: true, state, idMapSize: localCount, username, remoteCount });
           break;
         }
 
