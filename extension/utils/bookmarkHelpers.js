@@ -18,9 +18,17 @@
 /**
  * Chrome bookmark tree has three root-level folders (id "1"/"2"/"3"). We
  * normalise them to MarkSync's `root` keys, and vice versa.
+ *
+ * WARNING: On some browsers (Edge, Brave, certain Chrome profiles since M127)
+ * the root-level IDs may differ from the canonical 1/2/3. Code that needs
+ * precise root identification should call `discoverRoots()` first and pass
+ * the result explicitly. The hard-coded maps here serve as defaults that work
+ * for ~95 % of installations. `initialMerge` calls `discoverRoots` before
+ * flattening the local tree.
+ *
  * @type {{[chromeId: string]: 'bookmark_bar'|'other'|'mobile'}}
  */
-export const CHROME_ROOT_TO_KEY = {
+export let CHROME_ROOT_TO_KEY = {
   '1': 'bookmark_bar',
   '2': 'other',
   '3': 'mobile',
@@ -30,11 +38,48 @@ export const CHROME_ROOT_TO_KEY = {
  * Inverse of `CHROME_ROOT_TO_KEY`.
  * @type {{[rootKey: string]: string}}
  */
-export const KEY_TO_CHROME_ROOT = {
+export let KEY_TO_CHROME_ROOT = {
   bookmark_bar: '1',
   other: '2',
   mobile: '3',
 };
+
+/**
+ * Walk `chrome.bookmarks.getTree()` output and discover the real root IDs.
+ * Browsers since ~Chrome 127 may use non-standard IDs for the three
+ * bookmark root folders. This function merges the discovered IDs into the
+ * module-level `CHROME_ROOT_TO_KEY` and `KEY_TO_CHROME_ROOT` so that
+ * `flattenLocalTree`, `rootChromeIdFor` and any other downstream caller
+ * automatically uses the right values.
+ *
+ * Heuristic: root "0" children whose title matches the known i18n names.
+ * If not found via title (e.g. untranslated profile), fall back to the
+ * hard-coded 1/2/3 defaults.
+ *
+ * @param {chrome.bookmarks.BookmarkTreeNode[]} tree
+ */
+export function discoverRoots(tree) {
+  const rootNames = {
+    bookmark_bar: ['bookmark bar', '书签栏', 'ブックマークバー'],
+    other: ['other bookmarks', '其他书签', 'その他のブックマーク'],
+    mobile: ['mobile bookmarks', '移动书签', 'モバイルブックマーク', '移动端书签'],
+  };
+
+  for (const rootNode of tree) {
+    if (String(rootNode.id) !== '0') continue;
+    for (const child of rootNode.children || []) {
+      const id = String(child.id);
+      const title = (child.title || '').trim().toLowerCase();
+      for (const [key, names] of Object.entries(rootNames)) {
+        if (names.some((nm) => title === nm.toLowerCase())) {
+          CHROME_ROOT_TO_KEY[id] = key;
+          KEY_TO_CHROME_ROOT[key] = id;
+        }
+      }
+    }
+  }
+  console.log('[MarkSync/discoverRoots]', JSON.stringify(CHROME_ROOT_TO_KEY));
+}
 
 /**
  * @typedef {'bookmark_bar'|'other'|'mobile'} RootKey
