@@ -31,6 +31,7 @@
 import * as IdMapStore from './idMapStore.js';
 import * as SyncState from './syncState.js';
 import { uuid } from './uuid.js';
+import { cleanupEmptyFolders } from './emptyFolderCleanup.js';
 import {
   callApi,
   getBookmarkTree,
@@ -161,6 +162,9 @@ export async function syncCycle({ apiUrl, token, manual = false }) {
       last_conflicts: conflicts.length,
       last_error: null,
     });
+
+    // ── 7. Clean up empty folders ────────────────────────────
+    await cleanupEmptyFolders({ tag });
 
     const summary = {
       ok: true,

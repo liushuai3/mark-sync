@@ -38,6 +38,7 @@
 import * as IdMapStore from './idMapStore.js';
 import * as SyncState from './syncState.js';
 import { uuid } from './uuid.js';
+import { cleanupEmptyFolders } from './emptyFolderCleanup.js';
 import {
   callApi,
   getBookmarkTree,
@@ -265,6 +266,9 @@ export async function initialMerge({ apiUrl, token }) {
       last_sync_at: serverTime,
       last_error: null,
     });
+
+    // Final pass: delete any empty folders left after the merge.
+    await cleanupEmptyFolders({ tag: '[MarkSync/initialMerge]' });
 
     return {
       ok: true,

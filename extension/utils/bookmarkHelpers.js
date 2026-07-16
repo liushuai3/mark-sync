@@ -82,7 +82,45 @@ export function discoverRoots(tree) {
 }
 
 /**
- * @typedef {'bookmark_bar'|'other'|'mobile'} RootKey
+ * Walk a Chrome bookmark tree and return IDs of empty (non-root) folders.
+ * A folder is considered empty when it has no children at all, or only has
+ * sub-folders that are themselves empty (recursively). This avoids deleting
+ * folders that only contain other folders which may still receive children.
+ *
+ * Root-level folders (id "0"/"1"/"2"/"3") are never returned.
+ * The function mutates the tree in place so you MUST call getBookmarkTree()
+ * fresh each time you need a clean snapshot.
+ *
+ * @param {chrome.bookmarks.BookmarkTreeNode[]} tree
+ * @returns {string[]} Chrome IDs of empty folders (deepest-first for safe deletion).
+ */
+export function findEmptyFolders(tree) {
+  const ROOTS = new Set(['0', '1', '2', '3']);
+  const result = [];
+
+  /** @returns {boolean} true when node or all its descendants are empty */
+  function walk(node) {
+    const id = String(node.id);
+    if (node.url) return false; // bookmark leaf
+    if (!node.children || node.children.length === 0) {
+      if (!ROOTS.has(id)) result.push(id);
+      return true;
+    }
+    // Has children — check if any leaf bookmarks exist below
+    let allEmpty = true;
+    for (const child of node.children) {
+      if (!walk(child)) allEmpty = false;
+    }
+    if (allEmpty && !ROOTS.has(id)) result.push(id);
+    return allEmpty;
+  }
+
+  for (const top of tree) walk(top);
+  // Return deepest-first so parents are removed after children
+  return result;
+}
+
+/**
  * @typedef {{
  *   chrome_id: string,
  *   type: 'folder'|'url',
@@ -386,4 +424,5 @@ export default {
   flattenLocalTree,
   computeCloudPaths,
   topoSortForCreate,
+  findEmptyFolders,
 };
