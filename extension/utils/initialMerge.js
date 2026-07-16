@@ -38,7 +38,6 @@
 import * as IdMapStore from './idMapStore.js';
 import * as SyncState from './syncState.js';
 import { uuid } from './uuid.js';
-import { cleanupEmptyFolders } from './emptyFolderCleanup.js';
 import {
   callApi,
   getBookmarkTree,
@@ -80,6 +79,16 @@ export async function initialMerge({ apiUrl, token }) {
     console.log('[MarkSync/initialMerge] skipped – another sync is running');
     return { ok: false, skipped: true };
   }
+
+  // Guard: if initialMerge already completed on this browser, skip
+  // and let the caller fall through to SYNC_NOW. Re-running de-dupes
+  // differently and creates phantom empty folders.
+  const existingState = await SyncState.get();
+  if (existingState && existingState.initial_merge_done) {
+    console.log('[MarkSync/initialMerge] already done, skipping');
+    return { ok: true, skipped: true, reason: 'already_done' };
+  }
+
   globalThis.__marksyncSyncing = true;
 
   try {
@@ -266,9 +275,6 @@ export async function initialMerge({ apiUrl, token }) {
       last_sync_at: serverTime,
       last_error: null,
     });
-
-    // Final pass: delete any empty folders left after the merge.
-    await cleanupEmptyFolders({ tag: '[MarkSync/initialMerge]' });
 
     return {
       ok: true,

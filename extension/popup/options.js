@@ -177,8 +177,8 @@ async function handleSave() {
     // 3. Clean legacy
     await cleanupLegacyKeys();
 
-    // 4. Trigger initial merge and show its result
-    showStatus('正在合并书签…', 'success', 60_000);
+    // 4. Initial merge or sync, depending on whether already done
+    showStatus('正在同步…', 'success', 60_000);
     try {
       const mergeResp = await sendMessage({ type: 'INITIAL_MERGE' });
       if (mergeResp && mergeResp.ok && !mergeResp.skipped) {
@@ -189,16 +189,32 @@ async function handleSave() {
         const msg = [`拉取（在本地创建）${created} 条`, `上传 ${a} 条`, `匹配 ${m} 条`];
         if (errors > 0) msg.push(`⚠️ ${errors} 条创建失败`);
         showStatus(`✅ 合并完成：${msg.join(' · ')}`, errors > 0 ? 'warn' : 'success', 6000);
+      } else if (mergeResp && mergeResp.reason === 'already_done') {
+        // Already merged before — do a normal sync instead.
+        const syncResp = await sendMessage({ type: 'SYNC_NOW' });
+        if (syncResp && syncResp.ok) {
+          const added = syncResp.added ?? 0;
+          const modified = syncResp.modified ?? 0;
+          const removed = syncResp.removed ?? 0;
+          const remote = syncResp.remoteApplied ?? 0;
+          if (added || modified || removed || remote) {
+            showStatus(`✅ 同步完成：新增 ${added} · 修改 ${modified} · 删除 ${removed} · 远程 ${remote}`, 'success', 5000);
+          } else {
+            showStatus('✅ 已是最新', 'success', 3000);
+          }
+        } else {
+          showStatus(`❌ 同步失败：${(syncResp && syncResp.error) || '未知错误'}`, 'error', 5000);
+        }
       } else if (mergeResp && mergeResp.error) {
-        showStatus(`❌ 合并失败：${mergeResp.error}`, 'error', 5000);
+        showStatus(`❌ 同步失败：${mergeResp.error}`, 'error', 5000);
       } else if (mergeResp && mergeResp.skipped) {
-        showStatus('⚠️ 合并被跳过（可能是背景任务冲突）', 'warn', 5000);
+        showStatus('⚠️ 同步被跳过（背景任务冲突）', 'warn', 5000);
       } else {
         showStatus('✅ 配置已保存', 'success', 3000);
       }
     } catch (err) {
       console.warn('INITIAL_MERGE 触发失败', err);
-      showStatus(`❌ 合并请求失败：${err.message}`, 'error', 5000);
+      showStatus(`❌ 同步请求失败：${err.message}`, 'error', 5000);
     }
   } catch (err) {
     showStatus(`保存失败：${err.message || err}`, 'error', 5000);

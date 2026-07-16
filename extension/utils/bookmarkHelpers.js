@@ -95,28 +95,23 @@ export function discoverRoots(tree) {
  * @returns {string[]} Chrome IDs of empty folders (deepest-first for safe deletion).
  */
 export function findEmptyFolders(tree) {
-  const ROOTS = new Set(['0', '1', '2', '3']);
+  const ROOTS = new Set(['0']);
+  for (const key of Object.keys(CHROME_ROOT_TO_KEY)) ROOTS.add(key);
   const result = [];
 
-  /** @returns {boolean} true when node or all its descendants are empty */
-  function walk(node) {
-    const id = String(node.id);
-    if (node.url) return false; // bookmark leaf
-    if (!node.children || node.children.length === 0) {
-      if (!ROOTS.has(id)) result.push(id);
-      return true;
+  function walk(nodes) {
+    for (const node of nodes) {
+      const id = String(node.id);
+      if (ROOTS.has(id) || node.url) continue;
+      // Folder with zero direct children → empty leaf.
+      if (!node.children || node.children.length === 0) {
+        result.push(id);
+      }
+      walk(node.children || []);
     }
-    // Has children — check if any leaf bookmarks exist below
-    let allEmpty = true;
-    for (const child of node.children) {
-      if (!walk(child)) allEmpty = false;
-    }
-    if (allEmpty && !ROOTS.has(id)) result.push(id);
-    return allEmpty;
   }
 
-  for (const top of tree) walk(top);
-  // Return deepest-first so parents are removed after children
+  for (const top of tree) walk([top]);
   return result;
 }
 
