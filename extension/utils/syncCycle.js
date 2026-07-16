@@ -157,10 +157,11 @@ export async function syncCycle({ apiUrl, token, manual = false }) {
     // ── 6. Persist idMap + updated SyncState ─────────────────────────
     await IdMapStore.save();
 
-    // Count active (non-deleted) remote bookmarks from the pull data.
-    const remoteCount = cloudList.filter((b) => b.deleted_at == null).length;
-
-    await SyncState.update({
+    // Count active (non-deleted) remote bookmarks.
+    // cloudList only has deltas on incremental pulls, so we can't use it.
+    // Instead, after applying remote changes and updating idMap, count the
+    // idMap entries — they mirror the active cloud state accurately.
+    const remoteCount = await IdMapStore.size();
       last_pulled_at: serverTime,
       last_sync_at: Date.now(),
       last_conflicts: conflicts.length,
