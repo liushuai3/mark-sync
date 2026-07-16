@@ -87,21 +87,15 @@ export async function initialMerge({ apiUrl, token }) {
     }
 
     // Step 1 — pull full remote state.
-    console.log('[MarkSync/initialMerge] step1: GET /sync/pull (full)');
     const pullData = await callApi(apiUrl, token, '/sync/pull');
     const cloudList = Array.isArray(pullData?.bookmarks) ? pullData.bookmarks : [];
     const serverTime = Number(pullData?.server_time) || Date.now();
 
     // Step 2 — flatten local tree.
     // First discover real root node IDs (some browsers use non-canonical IDs).
-    console.log('[MarkSync/initialMerge] step2: read chrome.bookmarks.getTree');
     const tree = await getBookmarkTree();
     discoverRoots(tree);
     const localList = flattenLocalTree(tree);
-    console.log(
-      `[MarkSync/initialMerge] local=${localList.length} cloud=${cloudList.length}`
-    );
-
     // Step 3 & 4 — index by dedupe key and match.
     const cloudPaths = computeCloudPaths(cloudList);
 
@@ -134,10 +128,6 @@ export async function initialMerge({ apiUrl, token }) {
       }
       return 0;
     });
-
-    console.log(
-      `[MarkSync/initialMerge] localOrdered=${localOrdered.length} localSeenKeys=0 matchLoop start`
-    );
 
     for (const l of localOrdered) {
       const key = dedupeKey(l.root, l.parent_path, l.name, l.url);
@@ -224,10 +214,6 @@ export async function initialMerge({ apiUrl, token }) {
       }
 
       try {
-        console.log(
-          `[MarkSync/initialMerge] creating "${c.name}" (${c.type}) parentChromeId=${parentChromeId} root=${c.root}`
-        );
-        if (!parentChromeId) {
           console.warn(
             `[MarkSync/initialMerge] no parentChromeId for "${c.name}" — skipping`
           );
@@ -240,10 +226,6 @@ export async function initialMerge({ apiUrl, token }) {
           url: c.type === 'url' ? c.url || '' : undefined,
         });
         createdLocally++;
-        console.log(
-          `[MarkSync/initialMerge] created local ${c.type} "${c.name}" → chrome_id=${created.id}`
-        );
-        await IdMapStore.set(c.id, {
           chrome_id: String(created.id),
           parent_cloud_id: c.parent_id || null,
           name: c.name,
@@ -264,13 +246,11 @@ export async function initialMerge({ apiUrl, token }) {
 
     // Step 6 — push locally-new bookmarks.
     if (pushAdded.length) {
-      console.log(`[MarkSync/initialMerge] step6: POST /sync/push added=${pushAdded.length}`);
       await callApi(apiUrl, token, '/sync/push', {
         method: 'POST',
         body: { added: pushAdded, modified: [], removed: [] },
       });
     } else {
-      console.log('[MarkSync/initialMerge] step6: nothing to push');
     }
 
     // Step 7 — persist idMap + syncState.
@@ -281,9 +261,6 @@ export async function initialMerge({ apiUrl, token }) {
       last_sync_at: serverTime,
       last_error: null,
     });
-
-    console.log(
-      `[MarkSync/initialMerge] done matched=${matchedCloudIds.size} added=${pushAdded.length} createdLocally=${createdLocally} dupLocal=${duplicateLocal}`
     );
 
     return {

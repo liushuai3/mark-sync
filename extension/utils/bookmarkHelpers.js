@@ -78,7 +78,7 @@ export function discoverRoots(tree) {
       }
     }
   }
-  console.log('[MarkSync/discoverRoots]', JSON.stringify(CHROME_ROOT_TO_KEY));
+  // root IDs discovered
 }
 
 /**

@@ -30,6 +30,12 @@ function getConfig() {
 function formatRelativeTime(ts) {
   if (!ts) return '从未同步';
   const diff = Date.now() - Number(ts);
+  // 超过 24h 直接显示完整日期
+  if (diff > 24 * 60 * 60 * 1000) {
+    const d = new Date(Number(ts));
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  }
   if (diff < 0) return '刚刚';
   const sec = Math.floor(diff / 1000);
   if (sec < 60) return `${sec} 秒前`;
@@ -39,7 +45,7 @@ function formatRelativeTime(ts) {
   if (hr < 24) return `${hr} 小时前`;
   const day = Math.floor(hr / 24);
   if (day < 30) return `${day} 天前`;
-  return new Date(Number(ts)).toLocaleDateString();
+  return new Date(Number(ts)).toISOString().slice(0, 19).replace('T', ' ');
 }
 
 function showToast(msg, kind = 'info', durationMs = 3500) {
