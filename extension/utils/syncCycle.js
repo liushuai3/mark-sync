@@ -41,6 +41,7 @@ import {
   flattenLocalTree,
   topoSortForCreate,
   rootChromeIdFor,
+  discoverRoots,
 } from './bookmarkHelpers.js';
 
 /**
@@ -110,6 +111,12 @@ export async function syncCycle({ apiUrl, token, manual = false }) {
       console.warn(`${tag} server returned full=true; caller must re-run initialMerge`);
       return { ok: false, skipped: true, reason: 'reset' };
     }
+
+    // ── 1.5  Discover real root node IDs ────────────────────────
+    // Must happen before applyRemoteChanges and buildLocalDiff so that
+    // rootChromeIdFor and flattenLocalTree use the correct Chrome root IDs.
+    const tree = await getBookmarkTree();
+    discoverRoots(tree);
 
     // ── 2. Apply remote changes (delete → update → create) ───────────
     const remoteApplied = await applyRemoteChanges(cloudList, serverTime, tag);
