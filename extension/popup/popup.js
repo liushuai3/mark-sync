@@ -126,8 +126,7 @@ function renderState(payload) {
   const username = payload && payload.username;
   const usernameRow = document.getElementById('usernameRow');
   const usernameLabel = document.getElementById('usernameLabel');
-  if (username && usernameRow && usernameLabel) {
-    usernameRow.style.display = '';
+  if (username && usernameLabel) {
     usernameLabel.textContent = username;
   }
 
