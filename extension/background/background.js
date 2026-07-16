@@ -359,18 +359,17 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
                 const j = await r.json();
                 username = (j.data && (j.data.username || j.data.email)) || (j.username || j.email) || null;
               }
-              // Fetch remote bookmark count via sync/pull (accepts mks_ token)
-              const pr = await fetch(apiUrl + '/sync/pull', {
-                headers: { Authorization: 'Bearer ' + token },
-              });
-              if (pr.ok) {
-                const pj = await pr.json();
-                const cloud = Array.isArray(pj.data?.bookmarks) ? pj.data.bookmarks : [];
+              // Fetch remote bookmark count via callApi (handles envelope + auth)
+              try {
+                const pullData = await callApi(apiUrl, token, '/sync/pull');
+                const cloud = Array.isArray(pullData?.bookmarks) ? pullData.bookmarks : [];
                 remoteCount = cloud.filter((b) => b.deleted_at == null).length;
+              } catch (pullErr) {
+                console.warn('[background] remote count fetch failed:', pullErr.message);
               }
             }
-          } catch {
-            // non-fatal
+          } catch (err) {
+            console.warn('[background] GET_STATE fetch failed:', err && err.message || err);
           }
           sendResponse({ ok: true, state, idMapSize: size, username, remoteCount });
           break;
