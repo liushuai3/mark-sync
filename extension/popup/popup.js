@@ -113,7 +113,14 @@ function renderState(payload) {
     0;
 
   document.getElementById('lastSyncLabel').textContent = formatRelativeTime(lastSync);
-  document.getElementById('bookmarkCountLabel').textContent = String(bookmarkCount);
+  document.getElementById('localCountLabel').textContent = String(bookmarkCount);
+
+  // Show remote count if available
+  const remoteCount = payload && payload.remoteCount;
+  const remoteLabel = document.getElementById('remoteCountLabel');
+  if (remoteLabel) {
+    remoteLabel.textContent = remoteCount != null ? String(remoteCount) : '-';
+  }
 
   // Show username if available
   const username = payload && payload.username;

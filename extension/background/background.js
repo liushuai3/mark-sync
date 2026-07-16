@@ -347,9 +347,11 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
           const size = await IdMapStore.size();
           // Also fetch the username from the API for displaying in the popup.
           let username = null;
+          let remoteCount = null;
           try {
             const { apiUrl, token } = await getConfig();
             if (apiUrl && token) {
+              // Fetch username
               const r = await fetch(apiUrl + '/auth/me', {
                 headers: { Authorization: 'Bearer ' + token },
               });
@@ -357,11 +359,20 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
                 const j = await r.json();
                 username = (j.data && (j.data.username || j.data.email)) || (j.username || j.email) || null;
               }
+              // Fetch remote bookmark count via sync/pull (accepts mks_ token)
+              const pr = await fetch(apiUrl + '/sync/pull', {
+                headers: { Authorization: 'Bearer ' + token },
+              });
+              if (pr.ok) {
+                const pj = await pr.json();
+                const cloud = Array.isArray(pj.data?.bookmarks) ? pj.data.bookmarks : [];
+                remoteCount = cloud.filter((b) => b.deleted_at == null).length;
+              }
             }
           } catch {
-            // non-fatal; username stays null
+            // non-fatal
           }
-          sendResponse({ ok: true, state, idMapSize: size, username });
+          sendResponse({ ok: true, state, idMapSize: size, username, remoteCount });
           break;
         }
 
