@@ -3,6 +3,12 @@
 
 FROM node:22-bookworm-slim AS builder
 
+# prebuild-install 默认从 github.com 拉预编译二进制，国内 容易超时。
+# 改成 npmmirror.com 镜像。
+# 变量名规则：npm_config_<pkg中线变下划线>_binary_host_mirror
+ENV npm_config_better_sqlite3_binary_host_mirror=https://registry.npmmirror.com/-/binary/better-sqlite3 \
+    NODE_TLS_REJECT_UNAUTHORIZED=1
+
 # ==== Backend (含 archiver) ====
 WORKDIR /app/backend
 COPY backend/package*.json ./
