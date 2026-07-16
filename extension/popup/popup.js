@@ -40,7 +40,9 @@ async function checkHealth() {
       val.textContent = '未配置';
       return;
     }
-    const r = await fetch(apiUrl.replace(/\/+$/, '') + '/health', { signal: AbortSignal.timeout(5000) });
+    // /health is at the root, not under /api/health (which requires auth)
+    const base = apiUrl.replace(/\/+$/, '').replace(/\/api\/?$/, '');
+    const r = await fetch(base + '/health', { signal: AbortSignal.timeout(5000) });
     if (r.ok) val.textContent = '● 在线';
     else val.textContent = '✕ 离线';
   } catch {
