@@ -1,14 +1,5 @@
 <template>
   <div>
-    <n-h3 prefix="bar">
-      <n-space align="center" size="small">
-        <span>首页</span>
-        <n-tag v-if="auth.user?.username" size="small" type="info" round>
-          {{ auth.user.username }}
-        </n-tag>
-      </n-space>
-    </n-h3>
-
     <n-grid :cols="4" :x-gap="16" :y-gap="16" responsive="screen" item-responsive>
       <n-gi :span="4" :md="1">
         <StatCard title="书签总数" :value="stats?.total_bookmarks ?? '-'" :icon="BookmarksOutline" color="#2196F3" />
@@ -43,14 +34,11 @@
 
 <script setup>
 import { ref, onMounted, computed, h } from 'vue';
-import { NH3, NTag, NSpace } from 'naive-ui';
+import { NTag } from 'naive-ui';
 import { useMessage } from '../lib/naive-api.js';
 import { BookmarksOutline, FolderOutline, KeyOutline, TimeOutline } from '@vicons/ionicons5';
 import { statsApi } from '../api/index.js';
 import StatCard from '../components/StatCard.vue';
-import { useAuthStore } from '../stores/auth.js';
-
-const auth = useAuthStore();
 
 const message = useMessage();
 const stats = ref(null);
