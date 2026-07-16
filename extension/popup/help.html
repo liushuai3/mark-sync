@@ -54,7 +54,20 @@
       <div class="step-content">
         <strong>下载插件</strong>
         <p>在 Web 管理台的 <strong>「浏览器插件」</strong> 页面下载最新插件包</p>
-        <p>或者直接去 <a class="btn" id="downloadBtn" href="/downloads/marksync-extension-latest.zip" target="_blank">下载最新版</a></p>
+        <p>或者直接去 <a class="btn" id="downloadBtn" href="/api/version" target="_blank">下载最新版</a></p>
+        <script>
+          // 动态拼接当前版本号，避免写死链接
+          (async () => {
+            try {
+              const link = document.getElementById('downloadBtn');
+              if (!link) return;
+              const r = await fetch('/health');
+              const j = await r.json();
+              const v = j && j.data && j.data.version;
+              if (v) link.href = `/downloads/marksync-extension-v${v}.zip`;
+            } catch {}
+          })();
+        </script>
       </div>
     </div>
     <div class="step">

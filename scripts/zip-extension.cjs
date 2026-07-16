@@ -5,9 +5,21 @@ const fs = require('fs');
 const path = require('path');
 
 const src = process.env.SRC || path.resolve(__dirname, '..', 'extension');
-const out =
-  process.env.OUT ||
-  path.resolve(__dirname, '..', 'web', 'dist', 'downloads', 'marksync-extension-latest.zip');
+
+// Read version from manifest so the zip file is versioned (no more 'latest').
+let version = process.env.VERSION;
+if (!version) {
+  try {
+    const m = JSON.parse(fs.readFileSync(path.join(src, 'manifest.json'), 'utf8'));
+    version = m.version;
+  } catch (e) {
+    console.error('❌ cannot read manifest version:', e.message);
+    process.exit(1);
+  }
+}
+
+const defaultOutDir = path.resolve(__dirname, '..', 'web', 'dist', 'downloads');
+const out = process.env.OUT || path.join(defaultOutDir, `marksync-extension-v${version}.zip`);
 
 if (!fs.existsSync(src)) {
   console.error('❌ extension source not found:', src);

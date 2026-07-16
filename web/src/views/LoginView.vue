@@ -58,7 +58,7 @@
               {{ healthy ? '● 服务在线' : '○ 服务离线' }}
             </span>
           </n-space>
-          <n-button size="small" tertiary block tag="a" href="/downloads/marksync-extension-latest.zip" download>
+          <n-button size="small" tertiary block tag="a" :href="extDownloadUrl" download>
             <template #icon><n-icon><DownloadOutline /></n-icon></template>
             下载浏览器插件 (.zip)
           </n-button>
@@ -76,6 +76,9 @@ import { BookmarkOutline, DownloadOutline } from '@vicons/ionicons5';
 import { useAuthStore } from '../stores/auth.js';
 import { authApi } from '../api/index.js';
 import { health } from '../api/client.js';
+import { EXTENSION_META } from '../lib/extension-meta.js';
+
+const extDownloadUrl = `/downloads/marksync-extension-v${EXTENSION_META.version}.zip`;
 
 const router = useRouter();
 const auth = useAuthStore();
