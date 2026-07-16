@@ -120,9 +120,16 @@ async function handleSyncNow() {
     const added = s.added ?? s.created ?? 0;
     const modified = s.modified ?? s.updated ?? 0;
     const deleted = s.deleted ?? s.removed ?? 0;
+    const remoteApplied = s.remoteApplied ?? 0;
     const conflicts = s.conflicts ?? s.conflictCount ?? 0;
+    const isInitial = !!(resp.initialMerge || s.initialMerge);
 
-    if (added === 0 && modified === 0 && deleted === 0 && conflicts === 0) {
+    if (isInitial) {
+      const pulled = remoteApplied;
+      const pushed = added;
+      const matched = s.matched || 0;
+      showToast(`首次合并完成：拉取 ${pulled} · 上传 ${pushed} · 匹配 ${matched}`, 'success', 5000);
+    } else if (added === 0 && modified === 0 && deleted === 0 && remoteApplied === 0 && conflicts === 0) {
       showToast('已是最新', 'success');
     } else if (conflicts > 0) {
       showToast(`新增 ${added} · 修改 ${modified} · 删除 ${deleted} · ⚠️ ${conflicts} 冲突`, 'warn', 5000);

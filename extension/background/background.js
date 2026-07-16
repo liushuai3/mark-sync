@@ -118,6 +118,33 @@ async function runSyncCycle({ manual = false } = {}) {
   setBadge('syncing');
   try {
     const res = await syncCycle({ apiUrl, token, manual });
+
+    // If the initial merge has never run on this device (fresh install, or
+    // syncState got wiped), transparently fall through to initialMerge so the
+    // user's "立即同步" click actually reconciles data instead of returning
+    // an empty no-op. Subsequent runs go straight through syncCycle.
+    if (res && res.skipped && res.reason === 'needs_initial_merge') {
+      console.log('[MarkSync/background] first run on this device – running initialMerge');
+      const im = await initialMerge({ apiUrl, token });
+      if (im && im.ok) {
+        const changed = (im.added || 0) + (im.remotePulled || 0);
+        if (changed > 0) setBadge('success', changed);
+        else setBadge('no-op');
+        return {
+          ok: true,
+          added: im.added || 0,
+          modified: 0,
+          removed: 0,
+          remoteApplied: im.remotePulled || 0,
+          conflicts: 0,
+          initialMerge: true,
+          matched: im.matched || 0,
+        };
+      }
+      setBadge(im && im.skipped ? 'no-op' : 'error');
+      return im || { ok: false, error: 'initial merge failed' };
+    }
+
     if (!res || !res.ok) {
       if (res && res.skipped) {
         setBadge('no-op');
