@@ -183,9 +183,12 @@ async function handleSave() {
       const mergeResp = await sendMessage({ type: 'INITIAL_MERGE' });
       if (mergeResp && mergeResp.ok) {
         const a = mergeResp.added || 0;
-        const r = mergeResp.remotePulled || 0;
+        const created = mergeResp.createdLocally ?? 0;
         const m = mergeResp.matched || 0;
-        showStatus(`✅ 合并完成：拉取 ${r} · 上传 ${a} · 匹配 ${m}`, 'success', 5000);
+        const errors = mergeResp.createErrors ?? 0;
+        const msg = [`拉取（在本地创建）${created} 条`, `上传 ${a} 条`, `匹配 ${m} 条`];
+        if (errors > 0) msg.push(`⚠️ ${errors} 条创建失败`);
+        showStatus(`✅ 合并完成：${msg.join(' · ')}`, errors > 0 ? 'warn' : 'success', 6000);
       } else if (mergeResp && mergeResp.error) {
         showStatus(`❌ 合并失败：${mergeResp.error}`, 'error', 5000);
       } else if (mergeResp && mergeResp.skipped) {

@@ -132,6 +132,10 @@ export async function initialMerge({ apiUrl, token }) {
       return 0;
     });
 
+    console.log(
+      `[MarkSync/initialMerge] localOrdered=${localOrdered.length} localSeenKeys=0 matchLoop start`
+    );
+
     for (const l of localOrdered) {
       const key = dedupeKey(l.root, l.parent_path, l.name, l.url);
       if (localSeenKeys.has(key)) {
@@ -202,6 +206,7 @@ export async function initialMerge({ apiUrl, token }) {
     );
     const createOrder = topoSortForCreate(cloudUnmatched);
     let createdLocally = 0;
+    let createErrors = 0;
 
     for (const c of createOrder) {
       // Resolve parent Chrome id.
@@ -216,12 +221,25 @@ export async function initialMerge({ apiUrl, token }) {
       }
 
       try {
+        console.log(
+          `[MarkSync/initialMerge] creating "${c.name}" (${c.type}) parentChromeId=${parentChromeId} root=${c.root}`
+        );
+        if (!parentChromeId) {
+          console.warn(
+            `[MarkSync/initialMerge] no parentChromeId for "${c.name}" — skipping`
+          );
+          createErrors++;
+          continue;
+        }
         const created = await createBookmark({
           parentId: parentChromeId,
           title: c.name || '',
           url: c.type === 'url' ? c.url || '' : undefined,
         });
         createdLocally++;
+        console.log(
+          `[MarkSync/initialMerge] created local ${c.type} "${c.name}" → chrome_id=${created.id}`
+        );
         await IdMapStore.set(c.id, {
           chrome_id: String(created.id),
           parent_cloud_id: c.parent_id || null,
@@ -234,8 +252,9 @@ export async function initialMerge({ apiUrl, token }) {
           synced_at: serverTime,
         });
       } catch (err) {
+        createErrors++;
         console.warn(
-          `[MarkSync/initialMerge] failed to create local ${c.type} ${c.id}: ${err.message}`
+          `[MarkSync/initialMerge] failed to create local ${c.type} "${c.name}" (${c.id}): ${err.message}`
         );
       }
     }
@@ -268,7 +287,10 @@ export async function initialMerge({ apiUrl, token }) {
       ok: true,
       matched: matchedCloudIds.size,
       added: pushAdded.length,
+      createdLocally,
+      createErrors,
       remotePulled: cloudList.length,
+      remoteNew: cloudUnmatched.length,
     };
   } catch (err) {
     console.error('[MarkSync/initialMerge] failed:', err);
