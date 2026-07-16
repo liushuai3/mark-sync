@@ -159,10 +159,10 @@ export async function syncCycle({ apiUrl, token, manual = false }) {
 
     // Count active (non-deleted) remote bookmarks.
     // cloudList only has deltas on incremental pulls, so we can't use it.
-    // Instead, after applying remote changes and updating idMap, count the
-    // idMap entries — they mirror the active cloud state accurately.
     const remoteCount = await IdMapStore.size();
-      last_pulled_at: serverTime,
+    const remoteCount = await IdMapStore.size();
+    const remoteCount = await IdMapStore.size();
+    const remoteCount = await IdMapStore.size();
       last_sync_at: Date.now(),
       last_conflicts: conflicts.length,
       last_error: null,
