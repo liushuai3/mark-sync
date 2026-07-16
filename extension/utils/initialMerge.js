@@ -94,6 +94,15 @@ export async function initialMerge({ apiUrl, token }) {
     // Step 2 — flatten local tree.
     console.log('[MarkSync/initialMerge] step2: read chrome.bookmarks.getTree');
     const tree = await getBookmarkTree();
+    console.log('[MarkSync/initialMerge] tree root count:', tree.length);
+    if (tree.length > 0) {
+      const firstNode = tree[0];
+      console.log('[MarkSync/initialMerge] root node:', JSON.stringify({
+        id: firstNode.id,
+        title: (firstNode.title || '').slice(0, 50),
+        childCount: firstNode.children ? firstNode.children.length : 0,
+      }));
+    }
     const localList = flattenLocalTree(tree);
     console.log(
       `[MarkSync/initialMerge] local=${localList.length} cloud=${cloudList.length}`
