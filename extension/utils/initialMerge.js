@@ -79,16 +79,6 @@ export async function initialMerge({ apiUrl, token }) {
     console.log('[MarkSync/initialMerge] skipped – another sync is running');
     return { ok: false, skipped: true };
   }
-
-  // Guard: if initial merge was already completed on this browser,
-  // don't run it again — re-running matches differently and creates
-  // phantom empty folders on every options save.
-  const existingState = await SyncState.get();
-  if (existingState && existingState.initial_merge_done) {
-    console.log('[MarkSync/initialMerge] already done, skipped');
-    return { ok: true, skipped: true, reason: 'already_done' };
-  }
-
   globalThis.__marksyncSyncing = true;
 
   try {

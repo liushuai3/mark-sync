@@ -189,21 +189,6 @@ async function handleSave() {
         const msg = [`拉取（在本地创建）${created} 条`, `上传 ${a} 条`, `匹配 ${m} 条`];
         if (errors > 0) msg.push(`⚠️ ${errors} 条创建失败`);
         showStatus(`✅ 合并完成：${msg.join(' · ')}`, errors > 0 ? 'warn' : 'success', 6000);
-      } else if (mergeResp && mergeResp.reason === 'already_done') {
-        // Initial merge already ran before — do a regular sync instead.
-        showStatus('配置已保存，正在同步…', 'success', 60_000);
-        const syncResp = await sendMessage({ type: 'SYNC_NOW' });
-        const s = syncResp?.summary || syncResp?.stats || syncResp || {};
-        const added = s.added ?? 0;
-        const modified = s.modified ?? 0;
-        const removed = s.removed ?? 0;
-        const remoteApplied = s.remoteApplied ?? 0;
-        const conflicts = s.conflicts ?? 0;
-        if (added || modified || removed || remoteApplied) {
-          showStatus(`✅ 同步完成：新增 ${added} · 修改 ${modified} · 删除 ${removed} · 远程 ${remoteApplied}`, conflicts > 0 ? 'warn' : 'success', 5000);
-        } else {
-          showStatus('✅ 已是最新', 'success', 3000);
-        }
       } else if (mergeResp && mergeResp.error) {
         showStatus(`❌ 合并失败：${mergeResp.error}`, 'error', 5000);
       } else if (mergeResp && mergeResp.skipped) {
