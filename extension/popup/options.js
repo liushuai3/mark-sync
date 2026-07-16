@@ -224,7 +224,7 @@ async function handleSave() {
 
 document.addEventListener('DOMContentLoaded', async () => {
   const state = await storageSyncGet(STORAGE_KEYS);
-  document.getElementById('marksyncApiUrl').value = state.marksync_api_url || '';
+  document.getElementById('marksyncApiUrl').value = state.marksync_api_url || DEFAULT_API_URL;
   document.getElementById('marksyncToken').value = state.marksync_token || '';
   document.getElementById('autoSync').checked = state.autoSync || false;
 

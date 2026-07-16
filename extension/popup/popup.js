@@ -202,7 +202,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (!configured) return;
 
   document.getElementById('syncNowBtn').addEventListener('click', handleSyncNow);
-  document.getElementById('forceUploadBtn').addEventListener('click', handleForceUpload);
 
   await refreshState();
 });
