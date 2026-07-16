@@ -274,6 +274,7 @@ export async function initialMerge({ apiUrl, token }) {
       last_pulled_at: serverTime,
       last_sync_at: serverTime,
       last_error: null,
+      remote_count: cloudList.filter((b) => b.deleted_at == null).length,
     });
 
     return {

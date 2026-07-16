@@ -156,11 +156,16 @@ export async function syncCycle({ apiUrl, token, manual = false }) {
 
     // ── 6. Persist idMap + updated SyncState ─────────────────────────
     await IdMapStore.save();
+
+    // Count active (non-deleted) remote bookmarks from the pull data.
+    const remoteCount = cloudList.filter((b) => b.deleted_at == null).length;
+
     await SyncState.update({
       last_pulled_at: serverTime,
       last_sync_at: Date.now(),
       last_conflicts: conflicts.length,
       last_error: null,
+      remote_count: remoteCount,
     });
 
     // ── 7. Clean up empty folders ────────────────────────────

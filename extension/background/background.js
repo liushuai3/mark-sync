@@ -358,13 +358,11 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
           } catch {
             localCount = size; // fallback to idMap count
           }
-          // Also fetch the username from the API for displaying in the popup.
+          // Also fetch the username for displaying in the popup.
           let username = null;
-          let remoteCount = null;
           try {
             const { apiUrl, token } = await getConfig();
             if (apiUrl && token) {
-              // Fetch username
               const r = await fetch(apiUrl + '/auth/me', {
                 headers: { Authorization: 'Bearer ' + token },
               });
@@ -372,19 +370,13 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
                 const j = await r.json();
                 username = (j.data && (j.data.username || j.data.email)) || (j.username || j.email) || null;
               }
-              // Fetch remote bookmark count via callApi (handles envelope + auth)
-              try {
-                const pullData = await callApi(apiUrl, token, '/sync/pull');
-                const cloud = Array.isArray(pullData?.bookmarks) ? pullData.bookmarks : [];
-                remoteCount = cloud.filter((b) => b.deleted_at == null).length;
-              } catch (pullErr) {
-                console.warn('[background] remote count fetch failed:', pullErr.message);
-              }
             }
           } catch (err) {
             console.warn('[background] GET_STATE fetch failed:', err && err.message || err);
           }
-          sendResponse({ ok: true, state, idMapSize: localCount, username, remoteCount });
+          // remote_count is saved by syncCycle/initialMerge into SyncState on every sync
+          const remoteCount = state?.remote_count ?? null;
+                    sendResponse({ ok: true, state, idMapSize: localCount, username, remoteCount });
           break;
         }
 
