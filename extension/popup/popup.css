@@ -1,15 +1,10 @@
 /* 全局 */
 .container {
-  width: 640px;
-  max-width: 100vw;
-  min-height: 400px;
-  max-height: 100vh;
-  padding: 4px 16px 14px;
+  width: 320px;
+  padding: 4px 14px 14px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   color: #1d1d1f;
   background: #f8f9fc;
-  box-sizing: border-box;
-  overflow-y: auto;
 }
 
 /* ── header ────────────────────────────────────── */
