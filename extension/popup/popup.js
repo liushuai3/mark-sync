@@ -27,6 +27,54 @@ function getConfig() {
   });
 }
 
+// ─── 同步状态指示器 ──────────────────────────
+const INDICATOR_LABELS = {
+  healthy: ['● 在线', 'healthy'],
+  syncing: ['⟳ 同步中', 'syncing'],
+  error: ['✕ 连接异常', 'error'],
+  idle: ['○ 待同步', 'idle'],
+};
+
+function updateSyncIndicator(state) {
+  const dot = document.getElementById('syncDot');
+  const label = document.getElementById('syncStatusLabel');
+  const time = document.getElementById('syncStatusTime');
+  const row = document.getElementById('syncStatusRow');
+  if (!dot || !label || !row) return;
+
+  const lastSync = state.last_sync_at || state.lastSyncAt || 0;
+  const lastError = state.last_error;
+  const now = Date.now();
+
+  let key;
+  if (lastError && now - (state.last_sync_at || 0) > 60000) {
+    key = 'error';
+  } else if (lastSync && now - lastSync < 600000) {
+    key = 'healthy';
+  } else if (lastSync) {
+    key = 'idle';
+  } else {
+    key = 'idle';
+  }
+
+  const [lbl, cls] = INDICATOR_LABELS[key];
+  dot.className = 'sync-dot ' + cls;
+  label.textContent = lbl;
+  time.textContent = lastSync ? formatRelativeTime(lastSync) : '';
+}
+
+// ─── 同步中状态 ──────────────────────────
+function setSyncingLabel(syncing) {
+  const dot = document.getElementById('syncDot');
+  const label = document.getElementById('syncStatusLabel');
+  if (dot && label && syncing) {
+    dot.className = 'sync-dot syncing';
+    label.textContent = '⟳ 同步中';
+  } else if (dot && label && !syncing) {
+    // will be refreshed by renderState
+  }
+}
+
 function formatRelativeTime(ts) {
   if (!ts) return '从未同步';
   const diff = Date.now() - Number(ts);
@@ -62,10 +110,11 @@ function showToast(msg, kind = 'info', durationMs = 3500) {
 function setLoading(button, on) {
   if (!button) return;
   if (on) {
-    button.classList.add('loading');
+    button.classList.add('syncing');
     button.disabled = true;
+    setSyncingLabel(true);
   } else {
-    button.classList.remove('loading');
+    button.classList.remove('syncing');
     button.disabled = false;
   }
 }
@@ -109,6 +158,8 @@ function renderState(payload) {
   } else {
     row.style.display = 'none';
   }
+
+  updateSyncIndicator(state);
 }
 
 async function refreshState() {
@@ -151,27 +202,6 @@ async function handleSyncNow() {
     } else {
       showToast(`新增 ${added} · 修改 ${modified} · 删除 ${deleted}`, 'success');
     }
-    await refreshState();
-  } catch (err) {
-    showToast(`错误：${err.message || err}`, 'err', 5000);
-  } finally {
-    setLoading(btn, false);
-  }
-}
-
-async function handleForceUpload() {
-  if (!confirm('云端所有数据将被本地覆盖，确定？')) return;
-  const btn = document.getElementById('forceUploadBtn');
-  setLoading(btn, true);
-  showToast('正在强制上传...', 'info', 60_000);
-  try {
-    const resp = await sendMessage({ type: 'FORCE_UPLOAD' });
-    if (!resp || resp.ok === false) {
-      throw new Error((resp && resp.error) || '强制上传失败');
-    }
-    const s = resp.summary || resp.stats || resp;
-    const uploaded = s.uploaded ?? s.count ?? 0;
-    showToast(`已上传 ${uploaded} 条书签`, 'success');
     await refreshState();
   } catch (err) {
     showToast(`错误：${err.message || err}`, 'err', 5000);

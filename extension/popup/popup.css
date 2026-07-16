@@ -1,166 +1,53 @@
+/* 全局 */
 .container {
-  width: 300px;
-  padding: 15px;
+  width: 320px;
+  padding: 4px 14px 14px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  color: #1d1d1f;
+  background: #f8f9fc;
 }
 
-.remote-container {
-  width: 800px;
-  max-width: 90vw;
-  margin: 20px auto;
-  padding: 20px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-  border-radius: 12px;
-  background-color: white;
-}
-
-.remote-container .header {
-  padding-bottom: 15px;
-  border-bottom: 1px solid #f0f0f0;
-  margin-bottom: 20px;
-}
-
-.remote-container #status {
-  margin-top: 15px;
-  padding: 10px 15px;
-  border-radius: 8px;
-  background-color: #f8f9fa;
-  color: #5f6368;
-  text-align: center;
-}
-
-.remote-container .empty-state {
-  display: none;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px 20px;
-  text-align: center;
-  color: #666;
-  background-color: #f8f9fa;
-  border-radius: 8px;
-  margin: 20px 0;
-}
-
-/* 同步记录项样式 */
-.remote-container .record-item {
-    padding: 12px 15px;
-    border-bottom: 1px solid #eee;
-    transition: background-color 0.2s;
-}
-
-.remote-container .record-item:hover {
-    background-color: #f5f5f5;
-    border-radius: 8px;
-}
-
-.remote-container .record-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 5px;
-}
-
-.remote-container .record-date {
-    font-weight: 500;
-    color: #333;
-}
-
-.remote-container .record-status {
-    padding: 3px 8px;
-    border-radius: 12px;
-    font-size: 12px;
-    font-weight: 500;
-}
-
-.remote-container .record-status.success {
-    background-color: #e6f7ee;
-    color: #00875a;
-}
-
-.remote-container .record-status.failed {
-    background-color: #ffebe9;
-    color: #e53e3e;
-}
-
-.remote-container .record-details {
-    font-size: 13px;
-    color: #666;
-}
-
-.remote-container .record-operation {
-    margin-bottom: 3px;
-}
-
-.remote-container .record-message {
-    margin-top: 5px;
-    padding: 8px;
-    background-color: #f5f5f5;
-    border-radius: 4px;
-    font-size: 12px;
-    color: #555;
-}
-
-.button-group {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-button {
-  padding: 8px 16px;
-  background-color: #4CAF50;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-button:hover {
-  background-color: #45a049;
-}
-
-#status {
-  margin-top: 10px;
-  padding: 10px;
-  text-align: center;
-}
-
+/* ── header ────────────────────────────────────── */
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 15px;
+  padding: 10px 0 4px;
+  margin-bottom: 6px;
 }
 
 .header h2 {
   margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: 0.3px;
+  color: #1d1d1f;
 }
 
 .header-buttons {
   display: flex;
-  gap: 5px;
+  gap: 4px;
 }
 
 .icon-button {
-  background: #f1f3f4;
-  border: 1px solid #dadce0;
-  font-size: 18px;
+  background: #fff;
+  border: 1px solid #e3e5e8;
   color: #5f6368;
   cursor: pointer;
   padding: 0;
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
-  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+  border-radius: 8px;
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
 }
 
 .icon-button svg {
   display: block;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
 }
 
 .icon-button:hover {
@@ -169,328 +56,161 @@ button:hover {
   color: #202124;
 }
 
-.icon-button:hover:not(:disabled) {
-  transform: none;
-  box-shadow: none;
-}
-
-
-
-.toolbar {
-  display: flex;
-  gap: 15px;
-  margin-bottom: 20px;
-  align-items: center;
-}
-
-
-
-/* 使用说明页面样式 */
-.help-page {
-  position: relative;
-  background: white;
-  padding: 20px;
-  overflow-y: auto;
-}
-
-.help-content {
-  font-size: 14px;
-  line-height: 1.6;
-}
-
-.help-content h1 {
-  font-size: 24px;
-  margin-bottom: 20px;
-}
-
-.help-content h2 {
-  font-size: 20px;
-  margin: 20px 0 10px;
-  color: #333;
-}
-
-.help-content h3 {
-  font-size: 16px;
-  margin: 15px 0 10px;
-  color: #444;
-}
-
-.help-content p {
-  margin: 10px 0;
-}
-
-.help-content ul,
-.help-content ol {
-  padding-left: 25px;
-  margin: 10px 0;
-}
-
-.help-content li {
-  margin: 5px 0;
-}
-
-.help-page.show {
-  display: block;
-}
-
-.help-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.close-button {
-  background: none;
-  border: none;
-  font-size: 24px;
-  cursor: pointer;
-  padding: 5px;
-}
-
-.close-button:hover {
-  color: #666;
-}
-
-.warning-button {
-  background-color: #ff9800;
-}
-
-.warning-button:hover {
-  background-color: #f57c00;
-}
-
-.dialog {
-  display: none;
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.5);
-}
-
-.dialog.show {
-  display: block;
-}
-
-.dialog-content {
-  background: white;
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 20px;
-  overflow-y: auto;
-}
-
-.dialog-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 15px;
-  padding-bottom: 15px;
-  border-bottom: 1px solid #eee;
-}
-
-.dialog-header h3 {
-  margin: 0;
-  flex: 1;
-  text-align: center;
-}
-
-.back-button {
-  background: none;
-  border: none;
-  color: #666;
-  cursor: pointer;
-  padding: 8px;
-  font-size: 14px;
-}
-
-.back-button:hover {
-  color: #333;
-  background-color: #f0f0f0;
-  border-radius: 4px;
-}
-
-/* 远程书签管理样式 */
-.remote-bookmark-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-bottom: 15px;
-  padding: 5px;
-}
-
-.bookmark-list {
-  margin-top: 10px;
-}
-
-.bookmark-list-item {
+/* ── sync status indicator ─────────────────────── */
+.sync-status {
   display: flex;
   align-items: center;
-  padding: 12px 15px;
-  border-bottom: 1px solid #f0f0f0;
-  transition: background-color 0.2s;
-}
-
-.bookmark-list-item:last-child {
-  border-bottom: none;
-}
-
-.bookmark-list-item:hover {
-  background-color: #f8f9fa;
-  border-radius: 8px;
-}
-
-.bookmark-checkbox {
-  margin-right: 12px;
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
-}
-
-.bookmark-title {
-  font-weight: 500;
-  margin-bottom: 4px;
-  color: #202124;
-  font-size: 14px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.bookmark-url {
+  gap: 7px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  background: #fff;
+  border: 1px solid #e3e5e8;
+  border-radius: 10px;
   font-size: 12px;
-  color: #1a73e8;
-  word-break: break-all;
-  margin-bottom: 2px;
-  line-height: 1.4;
-}
-
-.bookmark-path {
-  font-size: 11px;
   color: #5f6368;
-  background-color: #f1f3f4;
-  padding: 2px 6px;
-  border-radius: 4px;
-  display: inline-block;
+  transition: border-color 0.2s ease;
 }
 
-.bookmark-details {
-  flex: 1;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 20px;
-  color: #666;
-}
-
-
-
-/* 加载动画 */
-@keyframes spin {
-  0% { transform: translateY(-50%) rotate(0deg); }
-  100% { transform: translateY(-50%) rotate(360deg); }
-}
-
-.loading {
-  position: relative;
-  pointer-events: none;  /* 禁止点击 */
-  opacity: 0.8;
-  transition: opacity 0.3s ease;
-}
-
-.loading::after {
-  content: '';
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  width: 16px;
-  height: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
+.sync-dot {
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  border-top-color: #fff;
-  animation: spin 0.8s ease-in-out infinite;
+  flex-shrink: 0;
+  transition: background-color 0.3s ease;
 }
 
-/* 禁用状态 */
-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transition: opacity 0.3s ease;
+.sync-dot.healthy {
+  background-color: #34a853;
+  box-shadow: 0 0 0 2px rgba(52, 168, 83, 0.15);
 }
 
-/* 按钮悬停和点击效果 */
-button {
-  transition: all 0.2s ease;
+.sync-dot.syncing {
+  background-color: #fbbc04;
+  box-shadow: 0 0 0 2px rgba(251, 188, 4, 0.2);
+  animation: pulse 1.2s ease-in-out infinite;
 }
 
-button:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+.sync-dot.error {
+  background-color: #ea4335;
+  box-shadow: 0 0 0 2px rgba(234, 67, 53, 0.15);
 }
 
-button:active:not(:disabled) {
-  transform: translateY(0);
-  box-shadow: none;
+.sync-dot.idle {
+  background-color: #dadce0;
 }
 
-/* v3 popup additions */
-.unconfigured {
-  padding: 16px;
-  text-align: center;
-  background: #FFF8E1;
-  border-radius: 6px;
-  color: #6D4C41;
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
 }
 
-.unconfigured p {
-  margin: 0 0 12px 0;
+.sync-status-label {
+  font-size: 12px;
+  color: #5f6368;
 }
 
+.sync-status-time {
+  margin-left: auto;
+  font-size: 11px;
+  color: #9aa0a6;
+}
+
+/* ── status panel ──────────────────────────────── */
 .status-panel {
-  margin-top: 14px;
-  padding: 10px 12px;
-  background: #f8f9fa;
-  border-radius: 6px;
-  font-size: 13px;
+  background: #fff;
+  border: 1px solid #e3e5e8;
+  border-radius: 10px;
+  padding: 4px 0;
+  margin-bottom: 10px;
+  overflow: hidden;
 }
 
 .status-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 3px 0;
+  padding: 8px 14px;
+  font-size: 13px;
+}
+
+.status-row + .status-row {
+  border-top: 1px solid #f2f2f4;
 }
 
 .status-label {
-  color: #5f6368;
+  color: #6b7280;
+  font-weight: 450;
 }
 
 .status-value {
-  color: #202124;
+  color: #1d1d1f;
   font-weight: 500;
+  text-align: right;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .status-value.warning {
-  color: #f57c00;
+  color: #e65100;
 }
 
+/* ── button ────────────────────────────────────── */
+.button-group {
+  margin-bottom: 4px;
+}
+
+#syncNowBtn {
+  width: 100%;
+  padding: 11px 16px;
+  background: linear-gradient(135deg, #34a853 0%, #2d9249 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 550;
+  letter-spacing: 0.3px;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 3px rgba(52, 168, 83, 0.15);
+  position: relative;
+}
+
+#syncNowBtn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(52, 168, 83, 0.25);
+}
+
+#syncNowBtn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(52, 168, 83, 0.15);
+}
+
+#syncNowBtn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* 同步中加载动画 */
+#syncNowBtn.syncing {
+  background: linear-gradient(135deg, #fbbc04 0%, #f59e0b 100%);
+  box-shadow: 0 1px 3px rgba(251, 188, 4, 0.2);
+}
+
+/* ── toast ─────────────────────────────────────── */
 .toast {
-  margin-top: 12px;
+  margin-top: 8px;
   padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 13px;
+  border-radius: 8px;
+  font-size: 12px;
   text-align: center;
   opacity: 0;
-  transform: translateY(4px);
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transform: translateY(3px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
   min-height: 0;
   pointer-events: none;
+  line-height: 1.4;
 }
 
 .toast.show {
@@ -498,7 +218,61 @@ button:active:not(:disabled) {
   transform: translateY(0);
 }
 
-.toast.info { background: #E3F2FD; color: #1565C0; }
-.toast.success { background: #E8F5E9; color: #2E7D32; }
-.toast.warn { background: #FFF3E0; color: #E65100; }
-.toast.err { background: #FFEBEE; color: #C62828; }
+.toast.info { background: #e8f0fe; color: #1967d2; }
+.toast.success { background: #e6f4ea; color: #1e8e3e; }
+.toast.warn { background: #fef7e0; color: #e37400; }
+.toast.err { background: #fce8e6; color: #c5221f; }
+
+/* ── unconfigured ──────────────────────────────── */
+.unconfigured {
+  padding: 24px 16px;
+  text-align: center;
+  background: #fff;
+  border: 1px solid #e3e5e8;
+  border-radius: 10px;
+  color: #5f6368;
+  font-size: 13px;
+}
+
+.unconfigured p {
+  margin: 0 0 14px;
+}
+
+#goSettingsButton {
+  padding: 8px 20px;
+  background: #1a73e8;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+#goSettingsButton:hover {
+  background: #1557b0;
+}
+
+/* ── loading 动画 ──────────────────────────────── */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+#syncNowBtn.syncing::after {
+  content: '';
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  margin-top: -7px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  animation: spin 0.7s linear infinite;
+}
+
+button.syncing {
+  pointer-events: none;
+}

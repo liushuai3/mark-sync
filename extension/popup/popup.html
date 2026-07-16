@@ -29,8 +29,11 @@
 
     <!-- 主界面 -->
     <div id="mainPanel">
-      <div class="button-group">
-        <button id="syncNowBtn">立即同步</button>
+      <!-- 同步状态指示器 -->
+      <div class="sync-status" id="syncStatusRow">
+        <span class="sync-dot" id="syncDot"></span>
+        <span class="sync-status-label" id="syncStatusLabel">检查状态…</span>
+        <span class="sync-status-time" id="syncStatusTime"></span>
       </div>
 
       <div class="status-panel">
@@ -50,6 +53,10 @@
           <span class="status-label">⚠️ 冲突</span>
           <span id="conflictsLabel" class="status-value warning">0</span>
         </div>
+      </div>
+
+      <div class="button-group">
+        <button id="syncNowBtn">立即同步</button>
       </div>
 
       <div id="toast" class="toast"></div>
