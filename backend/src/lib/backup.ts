@@ -128,6 +128,11 @@ export function restoreBackup(userId: number, id: number): RestoreResult {
   if (!Array.isArray(payload?.bookmarks)) throw new Error('Invalid backup file');
   const bookmarks: Bookmark[] = payload.bookmarks;
 
+  // Count only active (non-deleted) bookmarks for user-facing message.
+  // The DB row count and file record count differ because tombstones are stored
+  // to preserve sync semantics but shouldn't be counted as user data.
+  const activeCount = bookmarks.filter((b) => b.deleted_at == null).length;
+
   const ts = now();
   let restored = 0;
   const tx = db.transaction(() => {
@@ -153,7 +158,7 @@ export function restoreBackup(userId: number, id: number): RestoreResult {
     }
   });
   tx();
-  return { restored, cleared: bookmarks.length };
+  return { restored: activeCount, cleared: bookmarks.length };
 }
 
 export function getBackupConfig(userId: number): BackupConfig {
