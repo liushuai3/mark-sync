@@ -96,6 +96,7 @@ export async function initialMerge({ apiUrl, token }) {
     const tree = await getBookmarkTree();
     discoverRoots(tree);
     const localList = flattenLocalTree(tree);
+
     // Step 3 & 4 — index by dedupe key and match.
     const cloudPaths = computeCloudPaths(cloudList);
 
@@ -214,6 +215,7 @@ export async function initialMerge({ apiUrl, token }) {
       }
 
       try {
+        if (!parentChromeId) {
           console.warn(
             `[MarkSync/initialMerge] no parentChromeId for "${c.name}" — skipping`
           );
@@ -226,6 +228,7 @@ export async function initialMerge({ apiUrl, token }) {
           url: c.type === 'url' ? c.url || '' : undefined,
         });
         createdLocally++;
+        await IdMapStore.set(c.id, {
           chrome_id: String(created.id),
           parent_cloud_id: c.parent_id || null,
           name: c.name,
@@ -251,6 +254,7 @@ export async function initialMerge({ apiUrl, token }) {
         body: { added: pushAdded, modified: [], removed: [] },
       });
     } else {
+      // no local additions to push
     }
 
     // Step 7 — persist idMap + syncState.
@@ -261,7 +265,6 @@ export async function initialMerge({ apiUrl, token }) {
       last_sync_at: serverTime,
       last_error: null,
     });
-    );
 
     return {
       ok: true,

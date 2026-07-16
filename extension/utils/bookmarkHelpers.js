@@ -78,7 +78,7 @@ export function discoverRoots(tree) {
       }
     }
   }
-  // root IDs discovered
+  // discovered
 }
 
 /**
