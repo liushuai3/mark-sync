@@ -40,7 +40,6 @@
     {
       "resources": [
         "docs/README.md",
-        "popup/sync-record.html",
         "popup/popup.css",
         "popup/help.html"
       ],

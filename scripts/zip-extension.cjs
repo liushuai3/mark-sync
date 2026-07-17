@@ -31,14 +31,12 @@ if (fs.existsSync(out)) fs.unlinkSync(out);
 
 const excludes = [
   '.DS_Store',
-  'docs',
   'CLAUDE.md',
   'TESTING.md',
 ];
 
 function shouldExclude(relPath) {
   if (excludes.includes(relPath)) return true;
-  if (relPath.startsWith('docs/') || relPath.startsWith('docs\\')) return true;
   if (relPath.endsWith('/.DS_Store') || relPath === '.DS_Store') return true;
   return false;
 }
@@ -81,7 +79,7 @@ async function useArchiver() {
 function useSystemZip() {
   const { execFileSync } = require('child_process');
   const args = ['-r', '-9', out, '.', '-x'];
-  args.push('.DS_Store', '*/.DS_Store', 'docs/*', 'docs/**', 'CLAUDE.md', 'TESTING.md');
+  args.push('.DS_Store', '*/.DS_Store', 'CLAUDE.md', 'TESTING.md');
   execFileSync('zip', args, { cwd: src, stdio: ['ignore', 'inherit', 'inherit'] });
 }
 
