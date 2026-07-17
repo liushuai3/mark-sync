@@ -1,6 +1,27 @@
+/* 让页面在 Chrome / Edge / Firefox 下都不出现多余滚动条：
+   - options_ui 已改为 open_in_tab=true（独立标签页）
+   - 同时保持 iframe 模式下也不会溢出 */
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #fff;
+  overflow-x: hidden;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
 .container {
-  width: 400px;
-  padding: 20px;
+  width: 100%;
+  max-width: 520px;
+  min-width: 280px;
+  margin: 0 auto;
+  padding: 16px 20px;
+}
+
+@media (max-width: 380px) {
+  .container { padding: 12px; }
 }
 
 .form-group {
@@ -27,6 +48,7 @@ input[type="text"] {
   padding: 8px;
   border: 1px solid #ddd;
   border-radius: 4px;
+  box-sizing: border-box;
 }
 
 .button-group {
