@@ -32,6 +32,7 @@ COPY extension /app/extension
 COPY scripts/zip-extension.cjs /tmp/zip-extension.cjs
 RUN mkdir -p /app/web/dist/downloads \
   && SRC=/app/extension \
+     OUT=/app/web/dist/downloads/marksync-extension-v$(node -p "require('/app/extension/manifest.json').version").zip \
      NODE_PATH=/app/backend/node_modules \
      node /tmp/zip-extension.cjs \
   && cp /app/extension/popup/help.html /app/web/dist/help.html
