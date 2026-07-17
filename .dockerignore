@@ -3,13 +3,6 @@
 *.log
 .env
 .DS_Store
-deploy/
-docs/
-extension/docs/
-extension/CLAUDE.md
-extension/TESTING.md
-nginx.conf
-
 # 不要复制本机的 node_modules 和 dist（在容器内构建）
 **/node_modules/
 **/dist/
