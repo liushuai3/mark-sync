@@ -12,10 +12,7 @@
   "host_permissions": [
     "https://marksync.zcoolq.cn/*"
   ],
-  "optional_host_permissions": [
-    "http://*/*",
-    "https://*/*"
-  ],
+  "optional_host_permissions": [],
   "background": {
     "service_worker": "background/background.js",
     "type": "module"
