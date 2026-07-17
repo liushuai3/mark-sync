@@ -97,6 +97,10 @@ if (isProd && existsSync(WEB_DIST)) {
   logger.info(`Serving static files from ${WEB_DIST}`);
   // /downloads/* must be served before the catch-all, otherwise
   // missing zip files fall through to index.html (SPA fallback).
+  app.use('/downloads/*', async (c, next) => {
+    await next();
+    c.res.headers.set('Cache-Control', 'no-store');
+  });
   app.use('/downloads/*', serveStatic({ root: WEB_DIST }));
   app.use('/*', serveStatic({ root: WEB_DIST }));
   app.get('*', serveStatic({ path: `${WEB_DIST}/index.html` }));
