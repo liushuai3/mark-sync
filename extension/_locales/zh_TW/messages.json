@@ -1,0 +1,10 @@
+{
+  "extensionName": {
+    "message": "MarkSync 書籤同步",
+    "description": "擴充功能名稱"
+  },
+  "extensionDescription": {
+    "message": "安全、輕量的瀏覽器書籤同步工具。自建後端，資料自主可控，支援跨裝置雙向同步。",
+    "description": "擴充功能描述"
+  }
+}

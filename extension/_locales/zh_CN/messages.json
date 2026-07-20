@@ -1,0 +1,10 @@
+{
+  "extensionName": {
+    "message": "MarkSync 书签同步",
+    "description": "扩展名称"
+  },
+  "extensionDescription": {
+    "message": "安全、轻量的浏览器书签同步工具。自建后端，数据自主可控，支持跨设备双向同步。",
+    "description": "扩展描述"
+  }
+}

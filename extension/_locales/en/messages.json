@@ -1,0 +1,10 @@
+{
+  "extensionName": {
+    "message": "MarkSync Bookmark Sync",
+    "description": "Extension name"
+  },
+  "extensionDescription": {
+    "message": "Secure, lightweight browser bookmark sync. Self-hosted backend, full data ownership, two-way sync across devices.",
+    "description": "Extension description"
+  }
+}

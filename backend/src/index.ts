@@ -70,7 +70,7 @@ app.get('/health', (c) => {
     ok: true,
     data: {
       service: 'marksync-backend',
-      version: '3.1.5',
+      version: '3.1.6',
       uptime: process.uptime(),
       time: Date.now(),
     },
