@@ -113,8 +113,8 @@ async function onLogin() {
   loading.value = true;
   try {
     await auth.login(loginForm.value.username, loginForm.value.password);
+    router.replace('/app/dashboard');
     message.success('登录成功');
-    router.replace('/dashboard');
   } catch (err) {
     message.error(err.message || '登录失败');
   } finally {
@@ -138,8 +138,8 @@ async function onRegister() {
       registerForm.value.password,
       registerForm.value.email
     );
+    router.replace('/app/dashboard');
     message.success('注册成功');
-    router.replace('/dashboard');
   } catch (err) {
     message.error(err.message || '注册失败');
   } finally {
