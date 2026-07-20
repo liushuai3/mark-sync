@@ -24,8 +24,20 @@
             <n-form-item path="username" label="用户名">
               <n-input v-model:value="registerForm.username" placeholder="至少 3 个字符" />
             </n-form-item>
-            <n-form-item path="email" label="邮箱（可选）">
+            <n-form-item path="email" :label="emailRequired ? '邮箱' : '邮箱（可选）'">
               <n-input v-model:value="registerForm.email" placeholder="a@b.com" />
+            </n-form-item>
+            <n-form-item v-if="emailRequired" path="code" label="邮箱验证码">
+              <n-input-group>
+                <n-input v-model:value="registerForm.code" placeholder="6 位验证码" maxlength="6" />
+                <n-button
+                  :disabled="cooldownLeft > 0 || sending"
+                  :loading="sending"
+                  @click="onSendCode"
+                >
+                  {{ cooldownLeft > 0 ? `${cooldownLeft}s 后重发` : '发送验证码' }}
+                </n-button>
+              </n-input-group>
             </n-form-item>
             <n-form-item path="password" label="密码">
               <n-input v-model:value="registerForm.password" type="password" show-password-on="click" placeholder="至少 6 个字符" />
@@ -84,16 +96,21 @@ const message = useMessage();
 
 const mode = ref('login');
 const loading = ref(false);
+const sending = ref(false);
+const cooldownLeft = ref(0);
+let cooldownTimer = null;
 const canRegister = ref(true);
+const emailRequired = ref(false);
 const healthy = ref(false);
 
 const loginForm = ref({ username: '', password: '' });
-const registerForm = ref({ username: '', password: '', email: '' });
+const registerForm = ref({ username: '', password: '', email: '', code: '' });
 
 onMounted(async () => {
   try {
     const status = await authApi.status();
     canRegister.value = status.can_register;
+    emailRequired.value = !!status.email_verification && status.has_users;
     if (!status.has_users) mode.value = 'register';
   } catch {}
 
@@ -104,6 +121,38 @@ onMounted(async () => {
     healthy.value = false;
   }
 });
+
+function startCooldown(sec) {
+  cooldownLeft.value = sec;
+  if (cooldownTimer) clearInterval(cooldownTimer);
+  cooldownTimer = setInterval(() => {
+    cooldownLeft.value -= 1;
+    if (cooldownLeft.value <= 0) {
+      clearInterval(cooldownTimer);
+      cooldownTimer = null;
+    }
+  }, 1000);
+}
+
+async function onSendCode() {
+  const email = (registerForm.value.email || '').trim();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    message.error('请先输入有效邮箱');
+    return;
+  }
+  sending.value = true;
+  try {
+    await authApi.sendCode(email, 'register');
+    message.success('验证码已发送，请查看邮箱（5 分钟内有效）');
+    startCooldown(60);
+  } catch (err) {
+    const retry = err?.data?.retry_after;
+    if (retry) startCooldown(retry);
+    message.error(err.message || '发送失败');
+  } finally {
+    sending.value = false;
+  }
+}
 
 async function onLogin() {
   if (!loginForm.value.username || !loginForm.value.password) {
@@ -131,12 +180,23 @@ async function onRegister() {
     message.error('密码至少 6 位');
     return;
   }
+  if (emailRequired.value) {
+    if (!registerForm.value.email) {
+      message.error('请填写邮箱');
+      return;
+    }
+    if (!/^\d{6}$/.test(registerForm.value.code || '')) {
+      message.error('请输入 6 位邮箱验证码');
+      return;
+    }
+  }
   loading.value = true;
   try {
     await auth.register(
       registerForm.value.username,
       registerForm.value.password,
-      registerForm.value.email
+      registerForm.value.email,
+      registerForm.value.code
     );
     router.replace('/app/dashboard');
     message.success('注册成功');

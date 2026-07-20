@@ -16,6 +16,17 @@ export const config = {
   backupDir: process.env.BACKUP_DIR || './data/backups',
   // Security settings
   maxRequestBodySize: Number(process.env.MAX_REQUEST_BODY_SIZE || 1048576), // 1MB default
+  // SMTP settings (邮箱验证码)
+  smtp: {
+    host: process.env.SMTP_HOST || '',
+    port: Number(process.env.SMTP_PORT || 465),
+    secure: (process.env.SMTP_SECURE ?? 'true') === 'true',
+    user: process.env.SMTP_USER || '',
+    pass: process.env.SMTP_PASS || '',
+    from: process.env.SMTP_FROM || process.env.SMTP_USER || '',
+    fromName: process.env.SMTP_FROM_NAME || 'MarkSync',
+  },
+  requireEmailVerification: (process.env.REQUIRE_EMAIL_VERIFICATION ?? 'true') === 'true',
 };
 
 export const isProd = config.nodeEnv === 'production';

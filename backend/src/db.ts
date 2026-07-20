@@ -134,6 +134,20 @@ db.exec(`CREATE TABLE IF NOT EXISTS settings (
   updated_at INTEGER NOT NULL
 )`);
 
+// ─── Email verification codes (注册/改邮箱时用) ────────────────
+db.exec(`CREATE TABLE IF NOT EXISTS email_verifications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  email TEXT NOT NULL,
+  code TEXT NOT NULL,
+  purpose TEXT NOT NULL DEFAULT 'register',
+  ip TEXT,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  used_at INTEGER,
+  attempts INTEGER NOT NULL DEFAULT 0
+)`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_evc_email ON email_verifications(email, purpose, expires_at)`);
+
 export type User = {
   id: number;
   username: string;

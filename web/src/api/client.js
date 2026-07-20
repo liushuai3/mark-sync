@@ -29,6 +29,7 @@ export async function request(path, opts = {}) {
     const err = new Error(json.error || `HTTP ${res.status}`);
     err.code = json.code;
     err.status = res.status;
+    err.data = json.data;
     throw err;
   }
   return json.data;
