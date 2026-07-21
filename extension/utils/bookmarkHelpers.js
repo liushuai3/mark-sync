@@ -282,23 +282,21 @@ export function moveBookmark(id, dest) {
 }
 
 /**
- * Promisified `chrome.bookmarks.remove`. Errors that indicate the node is
- * already gone ("Can't find bookmark…") are swallowed so callers can treat
- * remove as idempotent.
+ * Promisified `chrome.bookmarks.remove`. Rejects on error so callers can
+ * distinguish real failures from already-removed nodes.
  * @param {string} id
  * @returns {Promise<void>}
  */
 export function removeBookmark(id) {
-  return new Promise((resolve) => {
-    try {
-      chrome.bookmarks.remove(id, () => {
-        // `chrome.runtime.lastError` fires when the node is missing; ignore.
-        void (chrome.runtime && chrome.runtime.lastError);
+  return new Promise((resolve, reject) => {
+    chrome.bookmarks.remove(String(id), () => {
+      const err = chrome.runtime && chrome.runtime.lastError;
+      if (err) {
+        reject(new Error(err.message));
+      } else {
         resolve();
-      });
-    } catch {
-      resolve();
-    }
+      }
+    });
   });
 }
 

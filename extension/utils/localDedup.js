@@ -130,7 +130,9 @@ export async function deduplicateLocalTree({ tag, verbose = true }) {
         }
         console.log(`${tag} dedup: removed chrome_id=${cid} (survivor=${survivor})`);
       } catch (err) {
-        failed.push({ cid, error: String(err?.message || err) });
+        const msg = String(err?.message || err);
+        failed.push({ cid, error: msg });
+        console.warn(`${tag} dedup: FAILED to remove chrome_id=${cid} — ${msg}`);
       }
     }
   }
