@@ -38,6 +38,7 @@
 import * as IdMapStore from './idMapStore.js';
 import * as SyncState from './syncState.js';
 import { uuid } from './uuid.js';
+import { deduplicateLocalTree } from './localDedup.js';
 import {
   callApi,
   getBookmarkTree,
@@ -95,6 +96,9 @@ export async function initialMerge({ apiUrl, token }) {
     if (!apiUrl || !token) {
       return { ok: false, error: 'apiUrl and token are required' };
     }
+
+    // ── 0.5  Local dedup (clean up any local duplicates before merge) ──
+    await deduplicateLocalTree({ tag: '[MarkSync/initialMerge]' });
 
     // Step 1 — pull full remote state.
     const pullData = await callApi(apiUrl, token, '/sync/pull');
@@ -295,6 +299,10 @@ export async function initialMerge({ apiUrl, token }) {
     }
 
     // Step 6 — push locally-new bookmarks.
+
+    // ── 5.5  Local dedup (cloud-only creates may have introduced duplicates) ──
+    await deduplicateLocalTree({ tag: '[MarkSync/initialMerge]' });
+
     let backendDeduped = 0;
     if (pushAdded.length) {
       const pushRes = await callApi(apiUrl, token, '/sync/push', {

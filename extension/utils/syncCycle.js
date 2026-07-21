@@ -32,6 +32,7 @@ import * as IdMapStore from './idMapStore.js';
 import * as SyncState from './syncState.js';
 import { uuid } from './uuid.js';
 import { cleanupEmptyFolders } from './emptyFolderCleanup.js';
+import { deduplicateLocalTree } from './localDedup.js';
 import {
   callApi,
   getBookmarkTree,
@@ -94,6 +95,9 @@ export async function syncCycle({ apiUrl, token, manual = false }) {
 
     const since = Number(state.last_pulled_at) || 0;
 
+    // ── 0.5  Local dedup (before sync, clean up any local duplicates) ──
+    await deduplicateLocalTree({ tag });
+
     // ── 1. Pull remote deltas ────────────────────────────────────────
     console.log(`${tag} step1: GET /sync/pull?since=${since}`);
     const pullData = await callApi(
@@ -121,6 +125,9 @@ export async function syncCycle({ apiUrl, token, manual = false }) {
 
     // ── 2. Apply remote changes (delete → update → create) ───────────
     const remoteApplied = await applyRemoteChanges(cloudList, serverTime, tag);
+
+    // ── 2.5  Local dedup (after remote creates, they may introduce duplicates) ──
+    await deduplicateLocalTree({ tag });
 
     // ── 3. Build local diff (two-pass: assign cloud ids, then diff) ──
     const { added, modified, removed } = await buildLocalDiff(serverTime);
