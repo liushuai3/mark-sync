@@ -60,9 +60,42 @@ export let KEY_TO_CHROME_ROOT = {
  */
 export function discoverRoots(tree) {
   const rootNames = {
-    bookmark_bar: ['bookmark bar', '书签栏', 'ブックマークバー'],
-    other: ['other bookmarks', '其他书签', 'その他のブックマーク'],
-    mobile: ['mobile bookmarks', '移动书签', 'モバイルブックマーク', '移动端书签'],
+    bookmark_bar: [
+      'bookmark bar', 'bookmarks bar',
+      '书签栏', '書籤列',
+      'ブックマークバー',
+      '북마크 바', '북마크바',
+      'barre de favoris',
+      'lesezeichenleiste',
+      'barra dei segnalibri',
+      'barra de favoritos', 'barra de marcadores',
+      'панель закладок',
+      'pasek zakładek',
+    ],
+    other: [
+      'other bookmarks', 'other favorites',
+      '其他书签', '其他書籤',
+      'その他のブックマーク',
+      '기타 북마크',
+      'autres favoris',
+      'weitere lesezeichen',
+      'altri segnalibri',
+      'otros favoritos', 'outros favoritos',
+      'другие закладки',
+      'pozostałe zakładki',
+    ],
+    mobile: [
+      'mobile bookmarks', 'mobile favorites',
+      '移动书签', '移动端书签', '行動書籤',
+      'モバイルブックマーク', 'モバイルのブックマーク',
+      '모바일 북마크',
+      'favoris mobiles',
+      'mobile lesezeichen',
+      'segnalibri mobili',
+      'favoritos móviles', 'favoritos do celular',
+      'мобильные закладки',
+      'mobilne zakładki',
+    ],
   };
 
   for (const rootNode of tree) {

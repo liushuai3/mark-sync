@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS bookmarks (
 CREATE INDEX IF NOT EXISTS idx_bookmarks_user ON bookmarks(user_id, deleted_at);
 CREATE INDEX IF NOT EXISTS idx_bookmarks_user_updated ON bookmarks(user_id, server_updated_at);
 CREATE INDEX IF NOT EXISTS idx_bookmarks_parent ON bookmarks(parent_id);
+-- Deduplication guard: see dedup migration section below (must run after cleanup).
 
 CREATE TABLE IF NOT EXISTS sync_logs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -117,6 +118,83 @@ CREATE TABLE IF NOT EXISTS backup_configs (
 `;
 
 db.exec(schema);
+
+// ─── Dedup migration ──────────────────────────────────────────────────
+// Clean up pre-existing duplicates (multi-browser initial merges before
+// dedup logic was added). For each duplicate group:
+//   1. Reparent children of duplicate folders to the surviving parent.
+//   2. Soft-delete duplicates, keeping the oldest.
+// This must run before the unique index is fully relied upon.
+try {
+  const dupRows = db
+    .prepare(
+      `SELECT user_id, root, COALESCE(parent_id, '') AS parent_key,
+              name, COALESCE(url, '') AS url_key, COUNT(*) AS cnt
+       FROM bookmarks WHERE deleted_at IS NULL
+       GROUP BY 1, 2, 3, 4, 5 HAVING cnt > 1`
+    )
+    .all() as Array<{ user_id: number; root: string; parent_key: string; name: string; url_key: string; cnt: number }>;
+
+  if (dupRows.length > 0) {
+    const ts = now();
+
+    // For each duplicate group, find the survivor (oldest created_at) and the victims.
+    const findGroup = db.prepare(
+      `SELECT id, type FROM bookmarks
+       WHERE deleted_at IS NULL
+         AND user_id = ? AND root = ?
+         AND COALESCE(parent_id, '') = ? AND name = ? AND COALESCE(url, '') = ?
+       ORDER BY created_at ASC`
+    );
+    const reparentChildren = db.prepare(
+      `UPDATE bookmarks SET parent_id = ?, server_updated_at = ?
+       WHERE parent_id = ? AND user_id = ? AND deleted_at IS NULL`
+    );
+    const softDeleteById = db.prepare(
+      `UPDATE bookmarks SET deleted_at = ?, date_modified = ?, server_updated_at = ?
+       WHERE id = ? AND user_id = ?`
+    );
+
+    let totalDeduped = 0;
+    const txn = db.transaction(() => {
+      for (const row of dupRows) {
+        const group = findGroup.all(
+          row.user_id, row.root, row.parent_key, row.name, row.url_key
+        ) as Array<{ id: string; type: string }>;
+        if (group.length <= 1) continue;
+
+        const survivor = group[0]; // oldest
+        const victims = group.slice(1);
+
+        for (const victim of victims) {
+          // If this is a folder, reparent its children to the survivor first.
+          if (victim.type === 'folder') {
+            reparentChildren.run(survivor.id, ts, victim.id, row.user_id);
+          }
+          softDeleteById.run(ts, ts, ts, victim.id, row.user_id);
+          totalDeduped++;
+        }
+      }
+    });
+    txn();
+    if (totalDeduped > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`[dedup-migration] soft-deleted ${totalDeduped} duplicate(s) across ${dupRows.length} groups`);
+    }
+  }
+
+  // Now that duplicates are cleaned up, create the unique guard index.
+  db.exec(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_bookmarks_dedupe
+       ON bookmarks(user_id, root, COALESCE(parent_id, ''), name, COALESCE(url, ''))
+       WHERE deleted_at IS NULL`
+  );
+} catch (err) {
+  // best-effort: if the cleanup fails, the unique index may fail on
+  // startup, which is noisy but non-fatal.
+  // eslint-disable-next-line no-console
+  console.warn('[dedup-migration] cleanup failed (non-fatal):', err);
+}
 
 // ─── Lightweight migrations for pre-existing databases ────────────────
 function ensureColumn(table: string, column: string, defSql: string) {

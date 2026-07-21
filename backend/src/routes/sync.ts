@@ -62,6 +62,19 @@ const selectSincePull = db.prepare<[number, number], Bookmark>(
 const findById = db.prepare<[string, number], Bookmark>(
   'SELECT * FROM bookmarks WHERE id = ? AND user_id = ?'
 );
+// Content-based dedup: find an existing active bookmark with same root/parent/name/url.
+// Used on push to prevent duplicate bookmarks from different browsers/devices.
+const findDuplicate = db.prepare<
+  [number, string, string, string, string],
+  Bookmark
+>(
+  `SELECT * FROM bookmarks
+    WHERE user_id = ? AND root = ?
+      AND COALESCE(parent_id, '') = ?
+      AND name = ? AND COALESCE(url, '') = ?
+      AND deleted_at IS NULL
+    LIMIT 1`
+);
 const insertBookmark = db.prepare(
   `INSERT INTO bookmarks
      (id, user_id, type, parent_id, root, name, url, position,
@@ -186,6 +199,8 @@ app.post('/push', async (c) => {
   let modifiedCount = 0;
   let removedCount = 0;
   const conflicts: Conflict[] = [];
+  /** Content-based dedup results returned to client for idMap correction. */
+  const deduped: Array<{ requested_id: string; existing_id: string; name: string }> = [];
 
   const tx = db.transaction(() => {
     const ts = now();
@@ -198,6 +213,27 @@ app.post('/push', async (c) => {
         conflicts.push({ id: b.id, reason: 'newer_exists' });
         continue;
       }
+
+      // Content-based dedup: check if an active bookmark with same
+      // (root, parent_id, name, url) already exists. This prevents
+      // duplicates when two browsers/devices push the same bookmark
+      // under different client-generated UUIDs.
+      const dup = findDuplicate.get(
+        user.id,
+        b.root,
+        b.parent_id ?? '',
+        b.name,
+        b.url ?? ''
+      );
+      if (dup) {
+        deduped.push({
+          requested_id: b.id,
+          existing_id: dup.id,
+          name: b.name,
+        });
+        continue;
+      }
+
       insertBookmark.run(
         b.id,
         user.id,
@@ -319,6 +355,7 @@ app.post('/push', async (c) => {
       added_count: addedCount,
       modified_count: modifiedCount,
       removed_count: removedCount,
+      deduped: deduped.length > 0 ? deduped : undefined,
       conflicts,
       server_time: serverTime,
     },

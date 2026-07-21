@@ -128,6 +128,7 @@ export async function syncCycle({ apiUrl, token, manual = false }) {
     // ── 4. Push local diff ───────────────────────────────────────────
     let conflicts = [];
     let pushCounts = { added_count: 0, modified_count: 0, removed_count: 0 };
+    let backendDeduped = 0;
     if (added.length || modified.length || removed.length) {
       console.log(
         `${tag} step4: POST /sync/push added=${added.length} modified=${modified.length} removed=${removed.length}`
@@ -142,6 +143,42 @@ export async function syncCycle({ apiUrl, token, manual = false }) {
         modified_count: Number(pushRes?.modified_count) || 0,
         removed_count: Number(pushRes?.removed_count) || 0,
       };
+
+      // Handle backend deduplication: the server may have merged some of our
+      // `added` entries into existing cloud bookmarks. Update idMap so the
+      // next cycle doesn't push the same duplicates again.
+      const serverDeduped = Array.isArray(pushRes?.deduped) ? pushRes.deduped : [];
+      if (serverDeduped.length > 0) {
+        // Build a reverse lookup: requested_id -> original added entry
+        const addedMap = new Map(added.map((a) => [a.id, a]));
+        for (const d of serverDeduped) {
+          const originalAdd = addedMap.get(d.requested_id);
+          if (!originalAdd) continue;
+          // Find the local chrome_id associated with this requested_id.
+          // Walk staged to find the node that was assigned this cloud_id.
+          // Since staged is local to buildLocalDiff, we track it differently.
+          // Instead: iterate idMap entries to find one with cloud_id == d.requested_id.
+          const tempEntry = await IdMapStore.getByCloudId(d.requested_id);
+          if (tempEntry && tempEntry.chrome_id) {
+            await IdMapStore.delete(d.requested_id);
+            await IdMapStore.set(d.existing_id, {
+              chrome_id: tempEntry.chrome_id,
+              parent_cloud_id: originalAdd.parent_id || null,
+              name: originalAdd.name,
+              url: originalAdd.url,
+              type: originalAdd.type,
+              root: originalAdd.root,
+              position: originalAdd.position,
+              date_modified: originalAdd.date_modified || 0,
+              synced_at: Date.now(),
+            });
+            backendDeduped++;
+          }
+        }
+        if (backendDeduped > 0) {
+          console.log(`${tag} backend deduped ${backendDeduped} duplicates`);
+        }
+      }
     } else {
       console.log(`${tag} step4: nothing to push`);
     }
@@ -339,10 +376,10 @@ async function resolveParentChromeId(parentCloudId, rootKey) {
 /**
  * Diff the current Chrome tree against the id-map baseline. Two passes:
  *
- *   Pass 1 – walk every local node; if it lacks a cloud id, allocate one
- *            (uuid v4) and stage it for the `added` bucket. We record the
- *            mapping immediately so children can resolve their parent's
- *            new cloud id in pass 2.
+ *   Pass 1 – walk every local node; if it lacks a cloud id, first check
+ *            whether an existing idMap entry already covers the same
+ *            (root, parent_path, name, url) dedupe key. If so, reuse that
+ *            cloud_id. Otherwise allocate a new uuid v4.
  *   Pass 2 – for every node, either compare with its idMap baseline and
  *            push into `modified` on any field change, or emit `added`
  *            using the parent's now-known cloud id.
@@ -360,6 +397,25 @@ async function buildLocalDiff(now) {
   /** @type {Set<string>} */
   const localChromeIds = new Set(localList.map((l) => String(l.chrome_id)));
 
+  // Build a dedupe index from existing idMap entries to detect
+  // locally-new bookmarks that should reuse an existing cloud_id.
+  // Key = (root, parent_path, name, url) where parent_path is
+  // derived from parent_cloud_id chain (approximate — may differ from
+  // flattenLocalTree's DFS path, but good enough for dedup).
+  const allEntries = await IdMapStore.all();
+  /** @type {Map<string, string>} dedupe_key -> cloud_id */
+  const dedupeToCloudId = new Map();
+  for (const e of allEntries) {
+    if (!e || !e.cloud_id) continue;
+    const parentPath = e.parent_cloud_id
+      ? (allEntries.find((x) => x && x.cloud_id === e.parent_cloud_id)?.name || '')
+      : '';
+    const key = `${e.root || ''}\u0000${parentPath}\u0000${e.name || ''}\u0000${e.url || ''}`;
+    if (!dedupeToCloudId.has(key)) {
+      dedupeToCloudId.set(key, e.cloud_id);
+    }
+  }
+
   // Pass 1: assign cloud ids to locally-new nodes so pass 2 can resolve
   // parent_id references (parents may themselves be brand-new).
   //
@@ -370,6 +426,7 @@ async function buildLocalDiff(now) {
   /** @type {Array<{node: import('./bookmarkHelpers.js').LocalNode, cloudId: string, isNew: boolean}>} */
   const staged = [];
 
+  let localDedupCount = 0;
   for (const l of localList) {
     const chromeId = String(l.chrome_id);
     const existing = await IdMapStore.getByChromeId(chromeId);
@@ -377,10 +434,24 @@ async function buildLocalDiff(now) {
       chromeToCloudId.set(chromeId, existing.cloud_id);
       staged.push({ node: l, cloudId: existing.cloud_id, isNew: false });
     } else {
-      const newId = uuid();
-      chromeToCloudId.set(chromeId, newId);
-      staged.push({ node: l, cloudId: newId, isNew: true });
+      // Check local dedup: does idMap already have an entry with same content?
+      const dk = `${l.root}\u0000${l.parent_path}\u0000${l.name}\u0000${l.url || ''}`;
+      const existingCloudId = dedupeToCloudId.get(dk);
+      if (existingCloudId) {
+        // Reuse existing cloud_id — this bookmark was already synced by
+        // another browser or a prior initialMerge.
+        chromeToCloudId.set(chromeId, existingCloudId);
+        staged.push({ node: l, cloudId: existingCloudId, isNew: false });
+        localDedupCount++;
+      } else {
+        const newId = uuid();
+        chromeToCloudId.set(chromeId, newId);
+        staged.push({ node: l, cloudId: newId, isNew: true });
+      }
     }
+  }
+  if (localDedupCount > 0) {
+    console.log(`[MarkSync/syncCycle] local dedup: ${localDedupCount} nodes reused existing cloud_ids`);
   }
 
   // Pass 2: build `added` and `modified`.
@@ -421,8 +492,28 @@ async function buildLocalDiff(now) {
     }
 
     // Existing mapping → check for field-level changes.
+    // Note: `isNew: false` can mean either (a) an existing idMap entry from
+    // a prior sync, or (b) a dedup-match in Pass 1 where we reused a cloud_id
+    // from another browser's bookmark.
     const baseline = await IdMapStore.getByCloudId(cloudId);
-    if (!baseline) continue; // Defensive: should not happen.
+
+    // Case (b): dedup-matched node — create a fresh idMap entry pointing to
+    // the existing cloud_id. No need to push anything since the cloud already
+    // has this bookmark.
+    if (!baseline) {
+      await IdMapStore.set(cloudId, {
+        chrome_id: String(node.chrome_id),
+        parent_cloud_id: parentCloudId,
+        name: node.name,
+        url: node.url,
+        type: node.type,
+        root: node.root,
+        position: node.position,
+        date_modified: now,
+        synced_at: now,
+      });
+      continue;
+    }
 
     const changes = {};
     let dirty = false;

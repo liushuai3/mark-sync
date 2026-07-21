@@ -205,10 +205,47 @@ export async function initialMerge({ apiUrl, token }) {
     }
 
     // Step 5 — create cloud-only rows locally (skip tombstones).
+    // Collect unmatched cloud rows, but also handle cloud-side duplicates:
+    // if a cloud row has the same dedupe key as an already-matched one,
+    // bind it to the same local chrome_id instead of creating a new entry.
     const cloudUnmatched = cloudList.filter(
       (c) => c.deleted_at == null && !matchedCloudIds.has(c.id)
     );
-    const createOrder = topoSortForCreate(cloudUnmatched);
+
+    // Cloud-side dedup: entries with same dedupe key as an already-matched row
+    // get bound immediately (no local create). These are duplicates from pre-fix
+    // multi-browser initial merges.
+    let cloudDedupBound = 0;
+    const trulyUnmatched = [];
+    for (const c of cloudUnmatched) {
+      const key = dedupeKey(c.root, cloudPaths.get(c.id) || '', c.name, c.url);
+      const cloudAlreadyMatched = cloudByKey.get(key);
+      if (cloudAlreadyMatched && matchedCloudIds.has(cloudAlreadyMatched.id)) {
+        // Cloud duplicate — find the chrome_id already bound to the primary cloud row.
+        let primaryChrome = null;
+        for (const [chId, clId] of chromeToCloud) {
+          if (clId === cloudAlreadyMatched.id) { primaryChrome = chId; break; }
+        }
+        if (primaryChrome) {
+          await IdMapStore.set(c.id, {
+            chrome_id: primaryChrome,
+            parent_cloud_id: c.parent_id || null,
+            name: c.name,
+            url: c.url,
+            type: c.type,
+            root: c.root,
+            position: c.position ?? 0,
+            date_modified: c.date_modified || 0,
+            synced_at: serverTime,
+          });
+          cloudDedupBound++;
+          continue;
+        }
+      }
+      trulyUnmatched.push(c);
+    }
+
+    const createOrder = topoSortForCreate(trulyUnmatched);
     let createdLocally = 0;
     let createErrors = 0;
 
@@ -258,11 +295,44 @@ export async function initialMerge({ apiUrl, token }) {
     }
 
     // Step 6 — push locally-new bookmarks.
+    let backendDeduped = 0;
     if (pushAdded.length) {
-      await callApi(apiUrl, token, '/sync/push', {
+      const pushRes = await callApi(apiUrl, token, '/sync/push', {
         method: 'POST',
         body: { added: pushAdded, modified: [], removed: [] },
       });
+
+      // Handle backend deduplication: the server may return `deduped` when
+      // another browser already pushed the same bookmark with a different UUID.
+      const serverDeduped = Array.isArray(pushRes?.deduped) ? pushRes.deduped : [];
+      if (serverDeduped.length > 0) {
+        // Build a lookup: requested_id -> { node, cloudId }
+        const requestMap = new Map(localToPush.map(({ node, cloudId }) => [cloudId, { node, cloudId }]));
+        for (const d of serverDeduped) {
+          const entry = requestMap.get(d.requested_id);
+          if (!entry) continue;
+          // Replace the fresh UUID mapping with the server's existing cloud_id.
+          // The local chrome_id now maps to the correct cloud_id.
+          await IdMapStore.delete(d.requested_id);
+          await IdMapStore.set(d.existing_id, {
+            chrome_id: entry.node.chrome_id,
+            parent_cloud_id: entry.node.parent_chrome_id
+              ? (chromeIdToAssignedCloudId.get(entry.node.parent_chrome_id) || null)
+              : null,
+            name: entry.node.name,
+            url: entry.node.url,
+            type: entry.node.type,
+            root: entry.node.root,
+            position: entry.node.position,
+            date_modified: entry.node.date_modified || 0,
+            synced_at: serverTime,
+          });
+          // Also update chromeIdToAssignedCloudId so children can resolve correctly.
+          chromeIdToAssignedCloudId.set(entry.node.chrome_id, d.existing_id);
+          backendDeduped++;
+        }
+        console.log(`[MarkSync/initialMerge] backend deduped ${backendDeduped} duplicates`);
+      }
     } else {
       // no local additions to push
     }
@@ -283,8 +353,10 @@ export async function initialMerge({ apiUrl, token }) {
       added: pushAdded.length,
       createdLocally,
       createErrors,
+      cloudDedupBound,
+      backendDeduped,
       remotePulled: cloudList.length,
-      remoteNew: cloudUnmatched.length,
+      remoteNew: trulyUnmatched.length,
     };
   } catch (err) {
     console.error('[MarkSync/initialMerge] failed:', err);
