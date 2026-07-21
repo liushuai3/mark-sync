@@ -28,83 +28,153 @@ import {
 } from './bookmarkHelpers.js';
 
 /**
- * Merge a duplicate folder's children into the survivor folder, then
- * remove the now-empty victim. Handles child-level dedup: if the survivor
- * already has a child with the same (title, url), the victim's duplicate
- * child is deleted instead of moved.
- *
- * @param {{ victimId: string, survivorId: string, tag: string }} opts
- * @returns {Promise<void>}
+ * Helper: get children of a Chrome bookmark folder.
+ * @param {string} parentId
+ * @returns {Promise<chrome.bookmarks.BookmarkTreeNode[]>}
  */
-async function mergeFolderInto({ victimId, survivorId, tag }) {
-  // Get children of both folders
-  const [victimChildren, survivorChildren] = await Promise.all([
-    new Promise((resolve, reject) => {
-      chrome.bookmarks.getChildren(String(victimId), (children) => {
-        const err = chrome.runtime?.lastError;
-        if (err) reject(new Error(err.message));
-        else resolve(children || []);
-      });
-    }),
-    new Promise((resolve, reject) => {
-      chrome.bookmarks.getChildren(String(survivorId), (children) => {
-        const err = chrome.runtime?.lastError;
-        if (err) reject(new Error(err.message));
-        else resolve(children || []);
-      });
-    }),
-  ]);
+function getChildren(parentId) {
+  return new Promise((resolve, reject) => {
+    chrome.bookmarks.getChildren(String(parentId), (children) => {
+      const err = chrome.runtime?.lastError;
+      if (err) reject(new Error(err.message));
+      else resolve(children || []);
+    });
+  });
+}
 
-  // Build lookup: (title, url) -> exists in survivor
-  const survivorIndex = new Map();
-  for (const c of survivorChildren) {
-    const key = `${c.title || ''}\u0000${c.url || ''}`;
-    survivorIndex.set(key, c);
-  }
-
-  let moves = 0;
-  let childDeletes = 0;
-
-  for (const child of victimChildren) {
-    const childKey = `${child.title || ''}\u0000${child.url || ''}`;
-
-    if (survivorIndex.has(childKey)) {
-      // Duplicate child — remove from victim (not move).
-      await new Promise((resolve, reject) => {
-        chrome.bookmarks.removeTree(String(child.id), () => {
-          const err = chrome.runtime?.lastError;
-          if (err) reject(new Error(err.message));
-          else resolve();
-        });
-      });
-      childDeletes++;
-    } else {
-      // Unique child — move to survivor.
-      await new Promise((resolve, reject) => {
-        chrome.bookmarks.move(String(child.id), { parentId: String(survivorId) }, () => {
-          const err = chrome.runtime?.lastError;
-          if (err) reject(new Error(err.message));
-          else resolve();
-        });
-      });
-      moves++;
-    }
-  }
-
-  console.log(
-    `${tag} dedup: mergeFolder victim=${victimId} -> survivor=${survivorId}: ` +
-    `${moves} moved, ${childDeletes} child-duplicates deleted`
-  );
-
-  // Now the victim folder should be empty (or contain only already-moved children).
-  // Use removeTree which works even on non-empty folders.
-  await new Promise((resolve, reject) => {
-    chrome.bookmarks.removeTree(String(victimId), () => {
+/**
+ * Helper: move a bookmark to a new parent.
+ */
+function moveToParent(childId, newParentId) {
+  return new Promise((resolve, reject) => {
+    chrome.bookmarks.move(String(childId), { parentId: String(newParentId) }, () => {
       const err = chrome.runtime?.lastError;
       if (err) reject(new Error(err.message));
       else resolve();
     });
   });
+}
+
+/**
+ * Recursively merge all children from victim folder into survivor folder.
+ * - Leaf bookmarks: move unique ones, delete duplicates.
+ * - Sub-folders: recursively merge matching ones, move unique ones.
+ * After this, the victim folder should be empty and safe to remove.
+ *
+ * @param {{ victimId: string, survivorId: string, tag: string }} opts
+ * @returns {Promise<{moves: number, childDeletes: number, subfoldersMerged: number}>}
+ */
+async function mergeChildrenRecursive({ victimId, survivorId, tag }) {
+  const [vChildren, sChildren] = await Promise.all([
+    getChildren(victimId),
+    getChildren(survivorId),
+  ]);
+
+  // Index survivor children by (title, url) for O(1) lookup
+  const sIndex = new Map();
+  for (const c of sChildren) {
+    sIndex.set(`${c.title || ''}\u0000${c.url || ''}`, c);
+  }
+
+  let moves = 0;
+  let childDeletes = 0;
+  let subfoldersMerged = 0;
+
+  // Process victim children one by one.
+  // Use a copy of the array since we may mutate the tree.
+  const toProcess = [...vChildren];
+
+  for (const vChild of toProcess) {
+    const childKey = `${vChild.title || ''}\u0000${vChild.url || ''}`;
+    const sMatch = sIndex.get(childKey);
+
+    if (vChild.url) {
+      // ── Leaf bookmark ──
+      if (sMatch) {
+        // Same title+url already exists in survivor → delete this duplicate.
+        try {
+          await removeBookmark(String(vChild.id));
+          childDeletes++;
+        } catch (err) {
+          console.warn(`${tag} dedup: child-delete failed id=${vChild.id}: ${err.message}`);
+        }
+      } else {
+        // Unique → move to survivor.
+        await moveToParent(String(vChild.id), survivorId);
+        moves++;
+      }
+    } else {
+      // ── Sub-folder ──
+      if (sMatch) {
+        // Same-named folder exists in survivor → recursively merge.
+        const sub = await mergeChildrenRecursive({
+          victimId: String(vChild.id),
+          survivorId: String(sMatch.id),
+          tag,
+        });
+        moves += sub.moves;
+        childDeletes += sub.childDeletes;
+        subfoldersMerged += 1 + sub.subfoldersMerged;
+        // After recursive merge, the victim sub-folder should be empty.
+        try {
+          await removeBookmark(String(vChild.id));
+        } catch (err) {
+          console.warn(`${tag} dedup: subfolder-remove failed id=${vChild.id}: ${err.message}`);
+          // Fallback: use removeTree if remove fails (shouldn't happen if merge was clean)
+          try {
+            await new Promise((resolve, reject) => {
+              chrome.bookmarks.removeTree(String(vChild.id), () => {
+                const e = chrome.runtime?.lastError;
+                if (e) reject(new Error(e.message));
+                else resolve();
+              });
+            });
+          } catch {
+            /* best-effort */
+          }
+        }
+      } else {
+        // Unique folder → move to survivor (with all its contents).
+        await moveToParent(String(vChild.id), survivorId);
+        moves++;
+      }
+    }
+  }
+
+  return { moves, childDeletes, subfoldersMerged };
+}
+
+/**
+ * Merge a duplicate folder's entire subtree into the survivor folder.
+ * Uses recursive merging: children are moved/merged level by level,
+ * preserving all unique bookmarks and only deleting true duplicates.
+ *
+ * @param {{ victimId: string, survivorId: string, tag: string }} opts
+ * @returns {Promise<void>}
+ */
+async function mergeFolderInto({ victimId, survivorId, tag }) {
+  const result = await mergeChildrenRecursive({ victimId, survivorId, tag });
+
+  console.log(
+    `${tag} dedup: mergeFolder victim=${victimId} -> survivor=${survivorId}: ` +
+    `${result.moves} moved, ${result.childDeletes} duplicates deleted, ` +
+    `${result.subfoldersMerged} sub-folders merged`
+  );
+
+  // After recursive merge, victim should be empty. Remove it.
+  try {
+    await removeBookmark(String(victimId));
+  } catch (err) {
+    // Fallback: removeTree in case something was left behind.
+    console.warn(`${tag} dedup: folder-remove failed id=${victimId}: ${err.message}, trying removeTree`);
+    await new Promise((resolve, reject) => {
+      chrome.bookmarks.removeTree(String(victimId), () => {
+        const e = chrome.runtime?.lastError;
+        if (e) reject(new Error(e.message));
+        else resolve();
+      });
+    });
+  }
 }
 
 /**
@@ -176,6 +246,19 @@ export async function deduplicateLocalTree({ tag, verbose = true }) {
     console.log(`${tag} dedup: done — nothing to remove`);
     return { removed: 0 };
   }
+
+  // Sort groups by depth: fewer path segments = shallower = process first.
+  // This ensures parent folders are merged before their children.
+  dupGroups.sort((a, b) => {
+    const aLen = a.key.split('\u0000').filter(Boolean).length;
+    const bLen = b.key.split('\u0000').filter(Boolean).length;
+    // Also sort by parent_chrome_id: root-level (empty parent) first
+    const aParent = a.key.split('\u0000')[1] || '';
+    const bParent = b.key.split('\u0000')[1] || '';
+    if (aParent && !bParent) return 1;
+    if (!aParent && bParent) return -1;
+    return aLen - bLen;
+  });
 
   // For each group, pick a survivor (prefer idMap-linked entry)
   let removed = 0;
