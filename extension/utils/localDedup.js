@@ -24,18 +24,33 @@ import {
   flattenLocalTree,
   removeBookmark,
   discoverRoots,
+  CHROME_ROOT_TO_KEY,
 } from './bookmarkHelpers.js';
 
 /**
- * @param {{ tag: string }} opts
+ * @param {{ tag: string, verbose?: boolean }} opts
  * @returns {Promise<{removed: number}>}
  */
-export async function deduplicateLocalTree({ tag }) {
+export async function deduplicateLocalTree({ tag, verbose = true }) {
+  const t0 = Date.now();
   const tree = await getBookmarkTree();
   discoverRoots(tree);
+
+  if (verbose) {
+    console.log(`${tag} dedup: roots discovered =>`, JSON.stringify(CHROME_ROOT_TO_KEY));
+  }
+
   const localList = flattenLocalTree(tree);
 
-  // Group by (root, parent_chrome_id, name, url)
+  // Stats
+  const folders = localList.filter((n) => n.type === 'folder').length;
+  const urls = localList.filter((n) => n.type === 'url').length;
+  console.log(`${tag} dedup: tree scanned — ${localList.length} nodes (${folders} folders, ${urls} urls) in ${Date.now() - t0}ms`);
+
+  // Group by dedupe key: (root, parent_chrome_id, name, url)
+  // parent_chrome_id is used instead of parent_path because it precisely
+  // identifies which folder a node belongs to (two folders can have the
+  // same name at different parent paths).
   /** @type {Map<string, string[]>} key -> chrome_ids */
   const groups = new Map();
   for (const n of localList) {
@@ -49,15 +64,47 @@ export async function deduplicateLocalTree({ tag }) {
     groups.get(key).push(n.chrome_id);
   }
 
-  let removed = 0;
-  const idsToDelete = [];
-
-  for (const [, chromeIds] of groups) {
+  // Find duplicate groups
+  /** @type {Array<{key: string, ids: string[], sample: object}>} */
+  const dupGroups = [];
+  for (const [key, chromeIds] of groups) {
     if (chromeIds.length <= 1) continue;
+    const parts = key.split('\u0000');
+    dupGroups.push({
+      key,
+      ids: [...chromeIds],
+      sample: {
+        root: parts[0],
+        parent_chrome_id: parts[1] || '(root)',
+        name: parts[2],
+        url: parts[3] || '(folder)',
+      },
+    });
+  }
 
+  if (verbose) {
+    console.log(`${tag} dedup: ${dupGroups.length} duplicate groups found`);
+    for (const g of dupGroups.slice(0, 20)) {
+      console.log(`${tag} dedup:   [${g.sample.root}] parent=${g.sample.parent_chrome_id} name="${g.sample.name}" url="${g.sample.url}" → ${g.ids.length} copies (ids=${g.ids.join(',')})`);
+    }
+    if (dupGroups.length > 20) {
+      console.log(`${tag} dedup:   ... and ${dupGroups.length - 20} more groups`);
+    }
+  }
+
+  if (dupGroups.length === 0) {
+    console.log(`${tag} dedup: done — nothing to remove`);
+    return { removed: 0 };
+  }
+
+  // For each group, pick a survivor (prefer idMap-linked entry)
+  let removed = 0;
+  const failed = [];
+
+  for (const g of dupGroups) {
     // Pick survivor: prefer one that exists in idMap (was synced before).
-    let survivor = chromeIds[0];
-    for (const cid of chromeIds) {
+    let survivor = g.ids[0];
+    for (const cid of g.ids) {
       try {
         const entry = await IdMapStore.getByChromeId(cid);
         if (entry && entry.cloud_id) {
@@ -69,37 +116,34 @@ export async function deduplicateLocalTree({ tag }) {
       }
     }
 
-    for (const cid of chromeIds) {
+    // Delete all non-survivors
+    for (const cid of g.ids) {
       if (cid === survivor) continue;
-      idsToDelete.push(cid);
+      try {
+        await removeBookmark(cid);
+        removed++;
+        // Clean up idMap if this chrome_id was mapped.
+        try {
+          await IdMapStore.deleteByChromeId(cid);
+        } catch {
+          /* best-effort */
+        }
+        console.log(`${tag} dedup: removed chrome_id=${cid} (survivor=${survivor})`);
+      } catch (err) {
+        failed.push({ cid, error: String(err?.message || err) });
+      }
     }
   }
 
-  // Delete in reverse order to minimize Chrome API calls
-  // (removing a folder also removes children, so we don't need to
-  //  separately delete children — they'll be caught in this pass).
-  for (const cid of idsToDelete) {
-    try {
-      await removeBookmark(cid);
-      removed++;
-      // Clean up idMap if this chrome_id was mapped.
-      try {
-        await IdMapStore.deleteByChromeId(cid);
-      } catch {
-        /* best-effort */
-      }
-    } catch (err) {
-      // Already removed (parent folder removal cascaded) — fine.
-    }
+  if (failed.length > 0) {
+    console.warn(`${tag} dedup: ${failed.length} remove failures`, failed.slice(0, 5));
   }
 
   if (removed > 0) {
     await IdMapStore.save();
-    console.log(`${tag} local dedup: removed ${removed} duplicates`);
-  } else {
-    console.log(`${tag} local dedup: none found`);
   }
 
+  console.log(`${tag} dedup: done — removed ${removed} duplicates, ${dupGroups.length - removed > 0 ? (dupGroups.length - removed) + ' groups skipped' : 'all groups processed'} in ${Date.now() - t0}ms`);
   return { removed };
 }
 

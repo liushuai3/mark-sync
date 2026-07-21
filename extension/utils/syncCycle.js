@@ -257,13 +257,18 @@ export async function syncCycle({ apiUrl, token, manual = false }) {
 async function applyRemoteChanges(cloudList, serverTime, tag) {
   if (!cloudList.length) return 0;
 
-  let applied = 0;
+  // Stats for diagnostics
   const tombstones = [];
   const active = [];
   for (const r of cloudList) {
     if (r.deleted_at != null) tombstones.push(r);
     else active.push(r);
   }
+  console.log(`${tag} applyRemote: ${active.length} active + ${tombstones.length} tombstones`);
+
+  let applied = 0;
+  let creates = 0;
+  let updates = 0;
 
   // 1) Tombstones first – parents before children is not strictly
   //    required for delete, but chrome.bookmarks.remove on a folder
@@ -345,6 +350,8 @@ async function applyRemoteChanges(cloudList, serverTime, tag) {
         index: r.position ?? undefined,
         url: r.type === 'url' ? r.url || '' : undefined,
       });
+      creates++;
+      console.log(`${tag} applyRemote: CREATE local chrome_id=${created.id} cloud_id=${r.id} name="${r.name}" type=${r.type} parent=${parentChromeId}`);
       await IdMapStore.set(r.id, {
         chrome_id: String(created.id),
         parent_cloud_id: r.parent_id || null,
@@ -362,6 +369,7 @@ async function applyRemoteChanges(cloudList, serverTime, tag) {
     }
   }
 
+  console.log(`${tag} applyRemote: done — ${applied} applied (${creates} local-creates + ${tombstones.length} tombstones)`);
   return applied;
 }
 
@@ -422,6 +430,7 @@ async function buildLocalDiff(now) {
       dedupeToCloudId.set(key, e.cloud_id);
     }
   }
+  console.log(`${tag} buildDiff: dedupe index has ${dedupeToCloudId.size} unique keys from ${allEntries.length} idMap entries`);
 
   // Pass 1: assign cloud ids to locally-new nodes so pass 2 can resolve
   // parent_id references (parents may themselves be brand-new).
@@ -569,6 +578,7 @@ async function buildLocalDiff(now) {
     await IdMapStore.delete(entry.cloud_id);
   }
 
+  console.log(`${tag} buildDiff: result added=${added.length} modified=${modified.length} removed=${removed.length}`);
   return { added, modified, removed };
 }
 
