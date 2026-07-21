@@ -430,7 +430,7 @@ async function buildLocalDiff(now) {
       dedupeToCloudId.set(key, e.cloud_id);
     }
   }
-  console.log(`${tag} buildDiff: dedupe index has ${dedupeToCloudId.size} unique keys from ${allEntries.length} idMap entries`);
+  console.log(`[MarkSync/syncCycle] buildDiff: dedupe index has ${dedupeToCloudId.size} unique keys from ${allEntries.length} idMap entries`);
 
   // Pass 1: assign cloud ids to locally-new nodes so pass 2 can resolve
   // parent_id references (parents may themselves be brand-new).
@@ -578,7 +578,7 @@ async function buildLocalDiff(now) {
     await IdMapStore.delete(entry.cloud_id);
   }
 
-  console.log(`${tag} buildDiff: result added=${added.length} modified=${modified.length} removed=${removed.length}`);
+  console.log(`[MarkSync/syncCycle] buildDiff: result added=${added.length} modified=${modified.length} removed=${removed.length}`);
   return { added, modified, removed };
 }
 
