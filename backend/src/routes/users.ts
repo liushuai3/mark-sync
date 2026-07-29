@@ -8,6 +8,9 @@ const app = new Hono();
 app.use('*', requireJwt);
 
 const listUsers = db.prepare<[], User>('SELECT * FROM users ORDER BY created_at ASC');
+const countBookmarksByUser = db.prepare<[], { user_id: number; cnt: number }>(
+  'SELECT user_id, COUNT(*) AS cnt FROM bookmarks WHERE deleted_at IS NULL GROUP BY user_id'
+);
 const getUserById = db.prepare<[number], User>('SELECT * FROM users WHERE id = ?');
 const deleteUser = db.prepare('DELETE FROM users WHERE id = ? AND is_admin = 0');
 const setAdmin = db.prepare('UPDATE users SET is_admin = ?, updated_at = ? WHERE id = ?');
@@ -28,6 +31,10 @@ app.get('/', (c) => {
     return c.json({ ok: false, error: '只有管理员可以查看用户列表', code: 'FORBIDDEN' }, 403);
   }
   const rows = listUsers.all();
+  const counts = new Map<number, number>();
+  for (const row of countBookmarksByUser.all()) {
+    counts.set(row.user_id, row.cnt);
+  }
   const data = rows.map((u) => ({
     id: u.id,
     username: u.username,
@@ -35,6 +42,7 @@ app.get('/', (c) => {
     is_admin: !!u.is_admin,
     created_at: u.created_at,
     updated_at: u.updated_at,
+    bookmark_count: counts.get(u.id) ?? 0,
   }));
   return c.json({ ok: true, data });
 });

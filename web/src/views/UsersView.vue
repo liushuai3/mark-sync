@@ -38,6 +38,18 @@ const columns = [
         row.is_admin ? '管理员' : '普通用户'
       ),
   },
+  {
+    title: '书签数',
+    key: 'bookmark_count',
+    width: 100,
+    sorter: (a, b) => (a.bookmark_count ?? 0) - (b.bookmark_count ?? 0),
+    render: (row) =>
+      h(
+        NTag,
+        { size: 'small', type: (row.bookmark_count ?? 0) > 0 ? 'info' : 'default', bordered: false },
+        () => String(row.bookmark_count ?? 0)
+      ),
+  },
   { title: '注册时间', key: 'created_at', render: (r) => formatDate(r.created_at) },
   {
     title: '操作',
