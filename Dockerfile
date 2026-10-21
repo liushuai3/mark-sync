@@ -35,7 +35,8 @@ RUN mkdir -p /app/web/dist/downloads \
      OUT=/app/web/dist/downloads/marksync-extension-v$(node -p "require('/app/extension/manifest.json').version").zip \
      NODE_PATH=/app/backend/node_modules \
      node /tmp/zip-extension.cjs \
-  && cp /app/extension/popup/help.html /app/web/dist/help.html
+  && cp /app/extension/popup/help.html /app/web/dist/help.html \
+  && sed -i "s/__EXT_VERSION__/$(node -p "require('/app/extension/manifest.json').version")/g" /app/web/dist/help.html
 
 # 清理 archiver
 RUN cd /app/backend && npm prune --omit=dev

@@ -16,7 +16,7 @@
       <n-steps :current="-1">
         <n-step title="下载并解压">
           <template #description>
-            点击上方按钮下载 <code>marksync-extension-{{ extMeta.version }}.zip</code>，解压到任意目录。
+            点击上方按钮下载 <code>marksync-extension-v{{ extMeta.version }}.zip</code>，解压到任意目录。
           </template>
         </n-step>
         <n-step title="打开浏览器扩展管理页">

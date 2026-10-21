@@ -160,7 +160,7 @@ docker ps --filter "name=$CONTAINER_NAME" --format "  {{.Names}}  {{.Status}}  {
 echo
 echo "  Web:       https://marksync.zcoolq.cn"
 echo "  API:       https://marksync.zcoolq.cn/api"
-echo "  Extension: https://marksync.zcoolq.cn/downloads/marksync-extension-${EXT_VERSION}.zip"
+echo "  Extension: https://marksync.zcoolq.cn/downloads/marksync-extension-v${EXT_VERSION}.zip"
 echo "  Commit:    $GIT_SHA"
 echo
 echo "  💡 日志:   docker compose -f $COMPOSE_FILE logs -f"
