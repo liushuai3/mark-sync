@@ -28,6 +28,9 @@ import { uuid } from '../utils/uuid.js';
 
 // ─── Constants ─────────────────────────────────────────────────────────
 const ALARM_NAME = 'marksync-sync';
+// P1-2: one-shot alarm carrying the ±30s jitter delay (survives SW death,
+// unlike setTimeout).
+const JITTER_ALARM_NAME = 'marksync-sync-jitter';
 const PERIOD_MINUTES = 5; // FR-2.1
 const JITTER_MS = 30_000; // FR-2.3  (±30 s)
 const BADGE_CLEAR_MS = 2500; // FR-11.2
@@ -196,15 +199,33 @@ async function runSyncCycle({ manual = false } = {}) {
   }
 }
 
-async function scheduledRun() {
-  // FR-2.3 — ±30 s jitter around the alarm tick.
+/**
+ * Run a scheduled (non-manual) cycle immediately — used for contexts where
+ * execution is guaranteed (onInstalled, jitter-alarm tick).
+ */
+function runScheduledCycle() {
+  runSyncCycle({ manual: false }).catch((err) => {
+    console.error('[MarkSync/background] scheduled run error', err);
+  });
+}
+
+/**
+ * P1-2: schedule the next cycle with a one-shot CHROME ALARM instead of
+ * setTimeout. A pending timer does not keep the MV3 service worker alive;
+ * the worker can be reclaimed before it fires and the cycle was silently
+ * skipped ("偶发漏同步"). Alarms survive worker shutdown by design.
+ * FR-2.3 — ±30 s jitter around the alarm tick.
+ */
+function scheduleJitteredRun() {
   const jitter = Math.random() * (2 * JITTER_MS) - JITTER_MS;
-  const delay = Math.max(0, jitter);
-  setTimeout(() => {
-    runSyncCycle({ manual: false }).catch((err) => {
-      console.error('[MarkSync/background] scheduledRun error', err);
-    });
-  }, delay);
+  const when = Date.now() + Math.max(0, jitter);
+  try {
+    chrome.alarms.create(JITTER_ALARM_NAME, { when });
+  } catch (err) {
+    // Alarm API unavailable → fall back to an immediate run (no jitter).
+    console.warn('[MarkSync/background] jitter alarm failed; running now', err);
+    runScheduledCycle();
+  }
 }
 
 // ─── forceUpload (SRS §6.3) ───────────────────────────────────────────
@@ -312,8 +333,13 @@ function ensureAlarm() {
 }
 
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm && alarm.name === ALARM_NAME) {
-    scheduledRun();
+  if (!alarm) return;
+  if (alarm.name === ALARM_NAME) {
+    // P1-2: hand the jittered run off to a one-shot alarm (see
+    // scheduleJitteredRun) — never delay inside the worker with a timer.
+    scheduleJitteredRun();
+  } else if (alarm.name === JITTER_ALARM_NAME) {
+    runScheduledCycle();
   }
 });
 
@@ -323,7 +349,7 @@ chrome.runtime.onInstalled.addListener((details) => {
   console.log(
     `[MarkSync/background] onInstalled reason=${details && details.reason}`
   );
-  scheduledRun();
+  runScheduledCycle();
 });
 
 // Cold browser restart.

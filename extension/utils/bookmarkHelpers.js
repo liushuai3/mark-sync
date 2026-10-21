@@ -186,41 +186,94 @@ export function rootChromeIdFor(rootKey) {
   return KEY_TO_CHROME_ROOT[rootKey] || '1';
 }
 
+/** HTTP statuses worth retrying (transient / rate-limit). 413 is NOT in this
+ *  set on purpose — pushInBatches handles 413 with a binary split instead. */
+const RETRYABLE_STATUS = new Set([408, 429, 500, 502, 503, 504]);
+
+/** Wait before the next retry: honor Retry-After, else exponential backoff
+ *  (1s, 2s, capped at 8s). */
+function retryDelay(attempt, retryAfterHeader) {
+  const ra = Number(retryAfterHeader);
+  if (Number.isFinite(ra) && ra >= 0 && ra <= 10) return ra * 1000;
+  return Math.min(1000 * 2 ** (attempt - 1), 8000);
+}
+
 /**
  * Fetch helper: talks to the MarkSync API with the standard bearer header
  * and unwraps `{ok:true,data:...}` envelopes. Throws on `ok:false` or
  * network/HTTP failure.
  *
+ * P1-3 hardening:
+ *  - 30 s per-request timeout (`AbortSignal.timeout`) so one hung socket can
+ *    no longer stall a whole cycle with the badge stuck on "⋯";
+ *  - transient failures (network error / timeout / 408 / 429 / 5xx) are
+ *    retried up to 2 times with exponential backoff; other 4xx are NOT
+ *    retried. Safe because every sync endpoint is idempotent server-side
+ *    (added: conflict-guarded, modified/removed: naturally idempotent).
+ *
  * @param {string} apiUrl e.g. `https://marksync.zcoolq.cn/api`
  * @param {string} token MarkSync API token (`mks_...`)
  * @param {string} path route path under the API base, e.g. `/sync/pull`
- * @param {{method?: string, body?: any}} [opts]
+ * @param {{method?: string, body?: any, timeoutMs?: number, retries?: number}} [opts]
  * @returns {Promise<any>} The `data` field from `{ok:true,data:...}`.
  */
 export async function callApi(apiUrl, token, path, opts = {}) {
   const base = (apiUrl || '').replace(/\/$/, '');
-  const res = await fetch(base + path, {
-    method: opts.method || 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: opts.body ? JSON.stringify(opts.body) : undefined,
-  });
-  let json = null;
-  try {
-    json = await res.json();
-  } catch {
-    throw new Error(`HTTP ${res.status}`);
+  const timeoutMs = opts.timeoutMs ?? 30_000;
+  const maxAttempts = opts.retries ?? 3; // 1 initial + 2 retries
+
+  let lastErr = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    let res;
+    try {
+      res = await fetch(base + path, {
+        method: opts.method || 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: opts.body ? JSON.stringify(opts.body) : undefined,
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    } catch (netErr) {
+      // Network failure / timeout — retryable.
+      const isTimeout = netErr && netErr.name === 'TimeoutError';
+      lastErr = new Error(`network error${isTimeout ? ` (timeout ${timeoutMs}ms)` : `: ${(netErr && netErr.message) || netErr}`}`);
+      lastErr.status = 0;
+      if (attempt < maxAttempts) {
+        const delay = retryDelay(attempt, null);
+        console.warn(`${path} attempt ${attempt} failed (${lastErr.message}); retry in ${delay}ms`);
+        await new Promise((r) => setTimeout(r, delay));
+        continue;
+      }
+      throw lastErr;
+    }
+
+    if (RETRYABLE_STATUS.has(res.status) && attempt < maxAttempts) {
+      lastErr = new Error(`HTTP ${res.status}`);
+      lastErr.status = res.status;
+      const delay = retryDelay(attempt, res.headers.get('retry-after'));
+      console.warn(`${path} attempt ${attempt} → ${res.status}; retry in ${delay}ms`);
+      await new Promise((r) => setTimeout(r, delay));
+      continue;
+    }
+
+    let json = null;
+    try {
+      json = await res.json();
+    } catch {
+      throw new Error(`HTTP ${res.status}`);
+    }
+    if (!json.ok) {
+      const msg = json.error || json.message || `HTTP ${res.status}`;
+      const err = new Error(msg);
+      err.code = json.code;
+      err.status = res.status;
+      throw err;
+    }
+    return json.data;
   }
-  if (!json.ok) {
-    const msg = json.error || json.message || `HTTP ${res.status}`;
-    const err = new Error(msg);
-    err.code = json.code;
-    err.status = res.status;
-    throw err;
-  }
-  return json.data;
+  throw lastErr || new Error('request failed');
 }
 
 /**
