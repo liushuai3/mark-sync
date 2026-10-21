@@ -93,6 +93,15 @@ export async function syncCycle({ apiUrl, token, manual = false }) {
       return { ok: false, skipped: true, reason: 'needs_initial_merge' };
     }
 
+    // Tombstone-window reset pending (set by a prior cycle or a crash
+    // mid-cycle). Bail out BEFORE any pull/push so state is not corrupted;
+    // the caller (background) must run initialMerge in re-merge mode.
+    // Without this guard a device offline >30d loops on full=true forever.
+    if (state.reset_pending) {
+      console.log(`${tag} skipped – reset pending, caller must re-merge`);
+      return { ok: false, skipped: true, reason: 'reset' };
+    }
+
     const since = Number(state.last_pulled_at) || 0;
 
     // ── 0.5  Local dedup (before sync, clean up any local duplicates) ──
@@ -110,10 +119,13 @@ export async function syncCycle({ apiUrl, token, manual = false }) {
     const full = pullData?.full === true;
 
     if (full && since > 0) {
-      // `since` was rejected (older than tombstone retention). Caller
-      // should re-run initialMerge; we bail out so we do not corrupt
-      // local state with a partial resync.
-      console.warn(`${tag} server returned full=true; caller must re-run initialMerge`);
+      // `since` was rejected (older than tombstone retention). Flag a
+      // reset so the next cycle / the background layer runs initialMerge
+      // in re-merge mode. We bail out so we do not corrupt local state
+      // with a partial resync. (P0-1 fix: this used to just return a skip
+      // nothing acted on → sync silently stopped forever.)
+      console.warn(`${tag} server returned full=true; flagging reset for re-merge`);
+      await SyncState.update({ reset_pending: true });
       return { ok: false, skipped: true, reason: 'reset' };
     }
 
@@ -124,7 +136,9 @@ export async function syncCycle({ apiUrl, token, manual = false }) {
     discoverRoots(tree);
 
     // ── 2. Apply remote changes (delete → update → create) ───────────
-    const remoteApplied = await applyRemoteChanges(cloudList, serverTime, tag);
+    const applyResult = await applyRemoteChanges(cloudList, serverTime, tag);
+    const remoteApplied = applyResult.applied;
+    const applyFailures = applyResult.failures;
 
     // ── 2.5  Local dedup (after remote creates, they may introduce duplicates) ──
     await deduplicateLocalTree({ tag });
@@ -204,11 +218,33 @@ export async function syncCycle({ apiUrl, token, manual = false }) {
     // Count active (non-deleted) remote bookmarks.
     // cloudList only has deltas on incremental pulls, so we can't use it.
     const remoteCount = await IdMapStore.size();
+
+    // ── P0-5: pull checkpoint discipline ──────────────────────────────
+    // Only advance `last_pulled_at` when EVERY remote row applied cleanly.
+    // On failure keep the old `since` so failed rows are re-pulled and
+    // retried next cycle (pull is ordered by server_updated_at; replaying
+    // already-applied rows is a cheap no-op). Advancing past a failed
+    // create used to orphan that subtree in the cloud forever.
+    // Streak cap: after 6 consecutive failed cycles, one permanently-bad
+    // row must not wedge sync forever — advance anyway, keep the error
+    // visible, and (for unmapped parents) flag a full re-merge instead.
+    const prevStreak = Number(state.failed_apply_streak) || 0;
+    const streak = applyFailures.length > 0 ? prevStreak + 1 : 0;
+    const wedged = applyFailures.length > 0 && streak >= 6;
+    const hasParentGap = applyFailures.some((f) => f.reason === 'parent-unmapped');
+    const advanceSince = applyFailures.length === 0 || wedged ? serverTime : since;
+
     await SyncState.update({
-      last_pulled_at: serverTime,
+      last_pulled_at: advanceSince,
       last_sync_at: Date.now(),
       last_conflicts: conflicts.length,
-      last_error: null,
+      last_error:
+        applyFailures.length > 0
+          ? `apply failures: ${applyFailures.length} (${applyFailures[0].reason})` +
+            (wedged ? ' – checkpoint released after 6 cycles' : ' – will retry')
+          : null,
+      failed_apply_streak: wedged ? 0 : streak,
+      ...(wedged && hasParentGap ? { reset_pending: true } : {}),
       remote_count: remoteCount,
     });
 
@@ -222,9 +258,11 @@ export async function syncCycle({ apiUrl, token, manual = false }) {
       removed: pushCounts.removed_count,
       remoteApplied,
       conflicts: conflicts.length,
+      applyFailures: applyFailures.length,
     };
     console.log(
-      `${tag} done added=${summary.added} modified=${summary.modified} removed=${summary.removed} remote=${remoteApplied} conflicts=${summary.conflicts}`
+      `${tag} done added=${summary.added} modified=${summary.modified} removed=${summary.removed} remote=${remoteApplied} conflicts=${summary.conflicts}` +
+        (applyFailures.length ? ` applyFailures=${applyFailures.length}` : '')
     );
     return summary;
   } catch (err) {
@@ -252,10 +290,13 @@ export async function syncCycle({ apiUrl, token, manual = false }) {
  * @param {Array<object>} cloudList  Rows from `/sync/pull`.
  * @param {number} serverTime        Pull's `server_time` (ms).
  * @param {string} tag               Log prefix.
- * @returns {Promise<number>}        Count of applied remote mutations.
+ * @returns {Promise<{applied: number, failures: Array<{id: string, reason: string}>}>}
+ *   `applied` = count of local mutations performed; `failures` = rows that
+ *   could not be applied cleanly. The caller MUST keep the pull checkpoint
+ *   behind any failure so those rows are re-pulled and retried.
  */
 async function applyRemoteChanges(cloudList, serverTime, tag) {
-  if (!cloudList.length) return 0;
+  if (!cloudList.length) return { applied: 0, failures: [] };
 
   // Stats for diagnostics
   const tombstones = [];
@@ -269,6 +310,14 @@ async function applyRemoteChanges(cloudList, serverTime, tag) {
   let applied = 0;
   let creates = 0;
   let updates = 0;
+  /**
+   * Rows that could not be applied cleanly this cycle. The caller keeps
+   * `last_pulled_at` behind these so they are re-pulled and retried.
+   * NEVER advance state past a failure — doing so was the root cause of
+   * "remote subtree permanently missing on this device".
+   * @type {Array<{id: string, reason: string}>}
+   */
+  const failures = [];
 
   // 1) Tombstones first – parents before children is not strictly
   //    required for delete, but chrome.bookmarks.remove on a folder
@@ -280,8 +329,18 @@ async function applyRemoteChanges(cloudList, serverTime, tag) {
       try {
         await removeBookmark(entry.chrome_id);
       } catch (err) {
-        // remove() is best-effort idempotent; swallow "already gone".
-        console.warn(`${tag} remote-delete failed id=${r.id}: ${err.message}`);
+        const msg = String((err && err.message) || err);
+        // remove() is idempotent only for "already gone". Any other
+        // failure must KEEP the idMap entry — dropping it made the next
+        // diff treat the still-present local bookmark as brand new, mint a
+        // fresh uuid and RESURRECT the deleted row (delete-wins broken).
+        if (/cannot find|does not exist|not found/i.test(msg)) {
+          console.warn(`${tag} remote-delete already-gone id=${r.id}`);
+        } else {
+          failures.push({ id: r.id, reason: `local-remove: ${msg}` });
+          console.warn(`${tag} remote-delete FAILED id=${r.id}: ${msg} – mapping kept, will retry`);
+          continue;
+        }
       }
     }
     await IdMapStore.delete(r.id);
@@ -295,46 +354,73 @@ async function applyRemoteChanges(cloudList, serverTime, tag) {
 
     if (entry) {
       // Existing mapping → update/move as needed.
+      //
+      // P0-4: idMap may only record mutations that ACTUALLY succeeded on
+      // the local tree. The old code wrote the remote values unconditionally;
+      // after a failed local update/move the next diff saw "local is dirty"
+      // and pushed the stale local value back over the remote edit
+      // (ping-pong lost update).
       const nameChanged = (entry.name || '') !== (r.name || '');
       const urlChanged = (entry.url || null) !== (r.url || null);
+      let contentOk = true;
       if (nameChanged || urlChanged) {
         try {
           await updateBookmark(entry.chrome_id, {
             title: r.name || '',
             ...(r.type === 'url' ? { url: r.url || '' } : {}),
           });
+          updates++;
         } catch (err) {
-          console.warn(`${tag} remote-update failed id=${r.id}: ${err.message}`);
+          contentOk = false;
+          failures.push({ id: r.id, reason: `local-update: ${err.message}` });
+          console.warn(`${tag} remote-update failed id=${r.id}: ${err.message} – will retry`);
         }
       }
 
       const parentChanged = (entry.parent_cloud_id || null) !== (r.parent_id || null);
       const posChanged = (entry.position ?? 0) !== (r.position ?? 0);
+      let moveOk = true;
       if (parentChanged || posChanged) {
-        const parentChromeId = await resolveParentChromeId(r.parent_id, r.root);
-        if (parentChromeId) {
+        let parentChromeId = null;
+        if (r.parent_id) {
+          const parentEntry = await IdMapStore.getByCloudId(r.parent_id);
+          if (parentEntry && parentEntry.chrome_id) {
+            parentChromeId = String(parentEntry.chrome_id);
+          } else {
+            // P1-5: parent not mapped (its create failed / arrives later) →
+            // DEFER the move. The old fallback dumped the node at the
+            // bookmark-bar root, and the next diff then pushed that wrong
+            // position to the cloud — permanent position drift.
+            moveOk = false;
+            failures.push({ id: r.id, reason: 'parent-unmapped' });
+            console.warn(`${tag} remote-move deferred id=${r.id} – parent not mapped`);
+          }
+        } else {
+          parentChromeId = rootChromeIdFor(r.root);
+        }
+        if (moveOk) {
           try {
             await moveBookmark(entry.chrome_id, {
               parentId: parentChromeId,
               index: r.position ?? 0,
             });
           } catch (err) {
-            console.warn(`${tag} remote-move failed id=${r.id}: ${err.message}`);
+            moveOk = false;
+            failures.push({ id: r.id, reason: `local-move: ${err.message}` });
+            console.warn(`${tag} remote-move failed id=${r.id}: ${err.message} – will retry`);
           }
-        } else {
-          console.warn(`${tag} remote-move deferred id=${r.id} – parent not mapped`);
         }
       }
 
       await IdMapStore.set(r.id, {
         chrome_id: entry.chrome_id,
-        parent_cloud_id: r.parent_id || null,
-        name: r.name,
-        url: r.url,
+        parent_cloud_id: moveOk ? r.parent_id || null : entry.parent_cloud_id || null,
+        name: contentOk ? r.name : entry.name,
+        url: contentOk ? r.url : entry.url,
         type: r.type,
         root: r.root,
-        position: r.position ?? 0,
-        date_modified: r.date_modified || 0,
+        position: moveOk ? r.position ?? 0 : entry.position ?? 0,
+        date_modified: contentOk && moveOk ? r.date_modified || 0 : entry.date_modified || 0,
         synced_at: serverTime,
       });
       applied++;
@@ -342,7 +428,25 @@ async function applyRemoteChanges(cloudList, serverTime, tag) {
     }
 
     // No mapping → create locally.
-    const parentChromeId = await resolveParentChromeId(r.parent_id, r.root);
+    //
+    // P0-4/P1-5: the parent MUST resolve — never fall back to the root
+    // folder. A node created at the wrong place made the next diff push
+    // the wrong parent_id to the cloud, permanently relocating the row.
+    // If the parent isn't mapped we defer (→ failure → checkpoint stays
+    // behind → the row is retried once its parent has been created).
+    let parentChromeId = null;
+    if (r.parent_id) {
+      const parentEntry = await IdMapStore.getByCloudId(r.parent_id);
+      if (parentEntry && parentEntry.chrome_id) {
+        parentChromeId = String(parentEntry.chrome_id);
+      } else {
+        failures.push({ id: r.id, reason: 'parent-unmapped' });
+        console.warn(`${tag} remote-create deferred id=${r.id} – parent not mapped`);
+        continue;
+      }
+    } else {
+      parentChromeId = rootChromeIdFor(r.root);
+    }
     try {
       const created = await createBookmark({
         parentId: parentChromeId,
@@ -365,28 +469,22 @@ async function applyRemoteChanges(cloudList, serverTime, tag) {
       });
       applied++;
     } catch (err) {
-      console.warn(`${tag} remote-create failed id=${r.id}: ${err.message}`);
+      failures.push({ id: r.id, reason: `local-create: ${err.message}` });
+      console.warn(`${tag} remote-create failed id=${r.id}: ${err.message} – will retry`);
     }
   }
 
-  console.log(`${tag} applyRemote: done — ${applied} applied (${creates} local-creates + ${tombstones.length} tombstones)`);
-  return applied;
+  console.log(
+    `${tag} applyRemote: done — ${applied} applied (${creates} local-creates + ${tombstones.length} tombstones), ${failures.length} deferred/failed`
+  );
+  return { applied, failures };
 }
 
-/**
- * Resolve the Chrome parent id for a cloud row. Falls back to the root
- * folder for `rootKey` when no mapping exists yet (top-level row).
- * @param {string | null | undefined} parentCloudId
- * @param {string} rootKey
- * @returns {Promise<string>}
- */
-async function resolveParentChromeId(parentCloudId, rootKey) {
-  if (parentCloudId) {
-    const parentEntry = await IdMapStore.getByCloudId(parentCloudId);
-    if (parentEntry && parentEntry.chrome_id) return String(parentEntry.chrome_id);
-  }
-  return rootChromeIdFor(rootKey);
-}
+// (Removed) resolveParentChromeId: its silent fallback to the root folder
+// caused remote rows whose parent was not yet mapped to be created at the
+// bookmark-bar root and then pushed back to the cloud as top-level —
+// position drift. Callers now resolve the parent explicitly and defer the
+// row as a failure when the parent is unmapped.
 
 /**
  * Diff the current Chrome tree against the id-map baseline. Two passes:

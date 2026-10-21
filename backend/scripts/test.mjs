@@ -55,7 +55,7 @@ function section(name) {
   console.log('\n── ' + name + ' ──');
 }
 
-async function waitForServer(base, tries = 40) {
+async function waitForServer(base, tries = 150) {
   for (let i = 0; i < tries; i++) {
     try {
       const r = await fetch(base + '/health');
@@ -72,10 +72,13 @@ async function main() {
   const dbPath = join(tmp, 'test.db');
   console.log('  temp DB:', dbPath);
 
-  const tsxBin = join(backendRoot, 'node_modules/.bin/tsx');
+  // Spawn via `node --import tsx` directly rather than the `.bin/tsx`
+  // shim: the shim re-execs node in a way that trips a native teardown
+  // assertion (node 24 + better-sqlite3) when the parent is a node process,
+  // crashing the server before it binds the port.
   const server = spawn(
-    tsxBin,
-    [join(backendRoot, 'src/index.ts')],
+    process.execPath,
+    ['--import', 'tsx', join(backendRoot, 'src/index.ts')],
     {
       cwd: backendRoot,
       env: {
@@ -456,6 +459,83 @@ async function main() {
     assert(
       bmTree.json.data.bookmark_bar.children.length === 1,
       'tree: bookmark_bar has 1 child'
+    );
+
+    section('sync/push — folder content-dedup re-parents children (P0-2 regression)');
+    // Device A seeds a folder + child.
+    const nowD = Date.now();
+    const df1 = {
+      id: 'uuid-df-1', type: 'folder', parent_id: null, root: 'other',
+      name: 'DedupFolder', url: null, position: 0, date_added: nowD, date_modified: nowD,
+    };
+    const dc1 = {
+      id: 'uuid-dc-1', type: 'url', parent_id: 'uuid-df-1', root: 'other',
+      name: 'ChildOne', url: 'https://example.com/one', position: 0, date_added: nowD, date_modified: nowD,
+    };
+    const seedDedup = await req('POST', '/api/sync/push', {
+      token: apiToken,
+      body: { added: [df1, dc1], modified: [], removed: [] },
+    });
+    assert(seedDedup.json.data.added_count === 2, 'dedup seed: folder + child inserted');
+
+    // Device B pushes the same folder under a NEW uuid + a genuinely new child.
+    const df2 = { ...df1, id: 'uuid-df-2' };
+    const dc2 = {
+      id: 'uuid-dc-2', type: 'url', parent_id: 'uuid-df-2', root: 'other',
+      name: 'ChildTwo', url: 'https://example.com/two', position: 1, date_added: nowD, date_modified: nowD,
+    };
+    const pushRemap = await req('POST', '/api/sync/push', {
+      token: apiToken,
+      body: { added: [df2, dc2], modified: [], removed: [] },
+    });
+    assert(
+      pushRemap.json.data.added_count === 1,
+      'dedup push: only the new child inserted (folder deduped)'
+    );
+    const dedupEntry = (pushRemap.json.data.deduped || []).find((d) => d.requested_id === 'uuid-df-2');
+    assert(
+      dedupEntry && dedupEntry.existing_id === 'uuid-df-1',
+      'dedup push: folder remapped to existing cloud id'
+    );
+    const pullDedup = await req('GET', '/api/sync/pull', { token: apiToken });
+    const childRow = pullDedup.json.data.bookmarks.find((b) => b.id === 'uuid-dc-2');
+    assert(!!childRow && childRow.deleted_at == null, 'dedup push: child is active');
+    assert(
+      childRow && childRow.parent_id === 'uuid-df-1',
+      `dedup push: child re-parented to surviving folder, no orphan (parent_id=${childRow && childRow.parent_id})`
+    );
+
+    section('sync/force — second force reusing existing ids (P0-3 regression)');
+    // Same payload as the first force: ids already exist as tombstones.
+    // The old blind INSERT threw a PRIMARY KEY conflict → whole tx 500.
+    const force2 = await req('POST', '/api/sync/force', {
+      token: apiToken,
+      body: {
+        bookmarks: [
+          {
+            id: 'uuid-forced-1',
+            type: 'url',
+            parent_id: null,
+            root: 'bookmark_bar',
+            name: 'ForcedOnly',
+            url: 'https://example.com',
+            position: 0,
+            date_added: Date.now(),
+            date_modified: Date.now(),
+          },
+        ],
+      },
+    });
+    assert(
+      force2.status === 200 && force2.json.ok,
+      `second force with existing ids → 200 (got ${force2.status}: ${force2.json && (force2.json.error || 'ok')})`
+    );
+    assert(force2.json.data && force2.json.data.total === 1, 'second force: total=1');
+    const pullF2 = await req('GET', '/api/sync/pull', { token: apiToken });
+    const activeF2 = pullF2.json.data.bookmarks.filter((b) => b.deleted_at == null);
+    assert(
+      activeF2.length === 1 && activeF2[0].id === 'uuid-forced-1',
+      'second force: exactly the forced row is active (prior rows tombstoned)'
     );
 
     section('Token revocation');

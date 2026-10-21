@@ -81,6 +81,36 @@ const insertBookmark = db.prepare(
       date_added, date_modified, server_updated_at, deleted_at, version, created_at)
    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, ?)`
 );
+// Force-push upsert: force semantics = client state wins, including
+// reviving rows that softDeleteAllActive just tombstoned. A blind INSERT
+// used to throw a PRIMARY KEY conflict whenever the client reused an
+// existing cloud id (the normal case for any second force upload) and the
+// whole transaction rolled back with a 500.
+const upsertBookmark = db.prepare(
+  `INSERT INTO bookmarks
+     (id, user_id, type, parent_id, root, name, url, position,
+      date_added, date_modified, server_updated_at, deleted_at, version, created_at)
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, ?)
+   ON CONFLICT(id) DO UPDATE SET
+     type = excluded.type,
+     parent_id = excluded.parent_id,
+     root = excluded.root,
+     name = excluded.name,
+     url = excluded.url,
+     position = excluded.position,
+     date_added = excluded.date_added,
+     date_modified = excluded.date_modified,
+     server_updated_at = excluded.server_updated_at,
+     deleted_at = NULL,
+     version = bookmarks.version + 1`
+);
+// Force push: soft-delete one row by id (used to clear intra-payload
+// content duplicates that would otherwise violate idx_bookmarks_dedupe).
+const softDeleteByIdInForce = db.prepare(
+  `UPDATE bookmarks
+      SET deleted_at = ?, date_modified = ?, server_updated_at = ?, version = version + 1
+    WHERE id = ? AND user_id = ? AND deleted_at IS NULL`
+);
 const softDeleteAllActive = db.prepare(
   `UPDATE bookmarks
       SET deleted_at = ?, server_updated_at = ?, version = version + 1
@@ -206,6 +236,26 @@ app.post('/push', async (c) => {
     const ts = now();
 
     // ── added ────────────────────────────────────────────────────────
+    // Phase A — classify every row BEFORE inserting anything:
+    //   conflict / content-dedup / candidate-for-insert.
+    // The requested_id → existing_id remap built here is applied to
+    // children in the SAME batch. Without it, when a folder row is
+    // content-deduped (skipped), its children used to be inserted with
+    // a dangling parent_id → orphan rows that other clients resolved to
+    // the bookmark-bar root ("bookmarks drift to root" bug).
+    const idRemap = new Map<string, string>();
+    const resolveParentId = (pid: string | null | undefined): string | null => {
+      let cur = pid ?? null;
+      for (let i = 0; cur && i < 8; i++) {
+        const mapped = idRemap.get(cur);
+        if (!mapped) break;
+        cur = mapped;
+      }
+      return cur;
+    };
+
+    type PendingAdd = (typeof added)[number] & { finalParent: string | null };
+    const candidates: PendingAdd[] = [];
     for (const b of added) {
       // SRS §8.4: id 已存在（含墓碑）→ conflicts newer_exists
       const existing = findById.get(b.id, user.id);
@@ -217,11 +267,14 @@ app.post('/push', async (c) => {
       // Content-based dedup: check if an active bookmark with same
       // (root, parent_id, name, url) already exists. This prevents
       // duplicates when two browsers/devices push the same bookmark
-      // under different client-generated UUIDs.
+      // under different client-generated UUIDs. parent_id is checked
+      // AFTER remapping so dedup works even when the parent itself was
+      // just deduped to a different id.
+      const finalParent = resolveParentId(b.parent_id);
       const dup = findDuplicate.get(
         user.id,
         b.root,
-        b.parent_id ?? '',
+        finalParent ?? '',
         b.name,
         b.url ?? ''
       );
@@ -231,14 +284,37 @@ app.post('/push', async (c) => {
           existing_id: dup.id,
           name: b.name,
         });
+        idRemap.set(b.id, dup.id);
         continue;
       }
+      candidates.push({ ...b, finalParent });
+    }
 
+    // Phase B — insert parent-first. A row whose parent is in this batch
+    // waits for it; a row whose parent cannot be found anywhere falls back
+    // to top-level (null) instead of dangling.
+    const pendingIds = new Set(candidates.map((c) => c.id));
+    const insertOne = (b: PendingAdd) => {
+      // Re-check content dedup with the final parent: parent remapping in
+      // phase B may have changed the dedup key (and guards the partial
+      // unique index from ever throwing inside the transaction).
+      const dupNow = findDuplicate.get(
+        user.id,
+        b.root,
+        b.finalParent ?? '',
+        b.name,
+        b.url ?? ''
+      );
+      if (dupNow && dupNow.id !== b.id) {
+        deduped.push({ requested_id: b.id, existing_id: dupNow.id, name: b.name });
+        idRemap.set(b.id, dupNow.id);
+        return;
+      }
       insertBookmark.run(
         b.id,
         user.id,
         b.type,
-        b.parent_id ?? null,
+        b.finalParent,
         b.root,
         b.name,
         b.url ?? null,
@@ -249,6 +325,46 @@ app.post('/push', async (c) => {
         ts  // created_at
       );
       addedCount++;
+    };
+
+    let remaining = candidates;
+    let guard = candidates.length + 8;
+    while (remaining.length && guard-- > 0) {
+      const next: PendingAdd[] = [];
+      let progress = false;
+      for (const b of remaining) {
+        // Refresh parent through any dedup decisions made since phase A.
+        b.finalParent = resolveParentId(b.finalParent);
+        if (b.finalParent == null) {
+          insertOne(b);
+          progress = true;
+          continue;
+        }
+        const parentRow = findById.get(b.finalParent, user.id);
+        if (parentRow && parentRow.deleted_at == null) {
+          insertOne(b);
+          progress = true;
+        } else if (parentRow) {
+          // Parent is a tombstone → attach to top-level, never dangle.
+          b.finalParent = null;
+          insertOne(b);
+          progress = true;
+        } else if (pendingIds.has(b.finalParent)) {
+          next.push(b); // parent is in this batch, wait for it
+        } else {
+          // Parent unknown anywhere → top-level, never dangle.
+          b.finalParent = null;
+          insertOne(b);
+          progress = true;
+        }
+      }
+      remaining = next;
+      if (!progress) break;
+    }
+    // Cycles / stragglers: still insert (top-level) so no row is dropped.
+    for (const b of remaining) {
+      b.finalParent = null;
+      insertOne(b);
     }
 
     // ── modified (LWW, SRS §7.2) ─────────────────────────────────────
@@ -383,13 +499,36 @@ app.post('/force', async (c) => {
     const ts = now();
     // Soft-delete every active row for this user
     softDeleteAllActive.run(ts, ts, user.id);
-    // Fresh INSERT with client-supplied ids
+    // Upsert with client-supplied ids (client state wins).
+    // forceRemap: dup-id → survivor-id, so children of an intra-payload
+    // content-deduped folder reattach to the surviving row instead of
+    // dangling.
+    const forceRemap = new Map<string, string>();
     for (const b of bookmarks) {
-      insertBookmark.run(
+      // Parent guard: never attach to a tombstoned/unknown parent.
+      let parentId = b.parent_id ?? null;
+      for (let i = 0; parentId && i < 8; i++) {
+        const mapped = forceRemap.get(parentId);
+        if (!mapped) break;
+        parentId = mapped;
+      }
+      if (parentId) {
+        const parentRow = findById.get(parentId, user.id);
+        if (!parentRow || parentRow.deleted_at != null) parentId = null;
+      }
+      // Intra-payload content duplicates (different ids, same content)
+      // would violate idx_bookmarks_dedupe → last one wins, others become
+      // tombstones. Keeps the force transaction from rolling back.
+      const dup = findDuplicate.get(user.id, b.root, parentId ?? '', b.name, b.url ?? '');
+      if (dup && dup.id !== b.id) {
+        softDeleteByIdInForce.run(ts, ts, ts, dup.id, user.id);
+        forceRemap.set(dup.id, b.id);
+      }
+      upsertBookmark.run(
         b.id,
         user.id,
         b.type,
-        b.parent_id ?? null,
+        parentId,
         b.root,
         b.name,
         b.url ?? null,

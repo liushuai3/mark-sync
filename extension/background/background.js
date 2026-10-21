@@ -146,6 +146,32 @@ async function runSyncCycle({ manual = false } = {}) {
       return im || { ok: false, error: 'initial merge failed' };
     }
 
+    // P0-1: tombstone-window reset (device offline >30 days). The old code
+    // dropped this on the floor → sync silently no-opped forever. Recovery
+    // = re-merge mode: rebuild idMap against a full pull (local bookmarks
+    // untouched), then resume normal cycles.
+    if (res && res.skipped && res.reason === 'reset') {
+      console.log('[MarkSync/background] tombstone-window reset – running re-merge');
+      const im = await initialMerge({ apiUrl, token, remerge: true });
+      if (im && im.ok) {
+        const changed = (im.added || 0) + (im.remotePulled || 0);
+        if (changed > 0) setBadge('success', changed);
+        else setBadge('no-op');
+        return {
+          ok: true,
+          added: im.added || 0,
+          modified: 0,
+          removed: 0,
+          remoteApplied: im.remotePulled || 0,
+          conflicts: 0,
+          remerge: true,
+          matched: im.matched || 0,
+        };
+      }
+      setBadge(im && im.skipped ? 'no-op' : 'error');
+      return im || { ok: false, error: 're-merge failed' };
+    }
+
     if (!res || !res.ok) {
       if (res && res.skipped) {
         setBadge('no-op');
@@ -235,7 +261,11 @@ async function forceUpload() {
         root: n.root,
         name: n.name,
         url: n.url,
-        parent_id: n.parent_chrome_id
+        // Field name must be `parent_cloud_id` — every other module reads
+        // that key. Writing `parent_id` here made the first sync cycle
+        // after a force upload see "parent changed" for every row and
+        // push a full wave of spurious moves/modifications.
+        parent_cloud_id: n.parent_chrome_id
           ? chromeIdToNewId.get(n.parent_chrome_id) || null
           : null,
         position: n.position,
@@ -332,7 +362,16 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
             break;
           }
           setBadge('syncing');
-          const res = await initialMerge({ apiUrl, token });
+          // If a tombstone-window reset is pending, force re-merge mode —
+          // the normal guard would skip an already-reconciled device.
+          let remerge = false;
+          try {
+            const st = await SyncState.get();
+            remerge = !!(st && st.reset_pending);
+          } catch {
+            /* fall back to normal mode */
+          }
+          const res = await initialMerge({ apiUrl, token, remerge });
           if (!res || !res.ok) {
             setBadge(res && res.skipped ? 'no-op' : 'error');
           } else {

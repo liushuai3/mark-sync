@@ -75,7 +75,7 @@ function dedupeKey(root, parentPath, name, url) {
  * @param {string} opts.token   MarkSync API token (`mks_...`)
  * @returns {Promise<{ok: boolean, added?: number, matched?: number, remotePulled?: number, error?: string, skipped?: boolean}>}
  */
-export async function initialMerge({ apiUrl, token }) {
+export async function initialMerge({ apiUrl, token, remerge = false }) {
   if (globalThis.__marksyncSyncing) {
     console.log('[MarkSync/initialMerge] skipped – another sync is running');
     return { ok: false, skipped: true };
@@ -84,8 +84,11 @@ export async function initialMerge({ apiUrl, token }) {
   // Guard: if initialMerge already completed on this browser, skip
   // and let the caller fall through to SYNC_NOW. Re-running de-dupes
   // differently and creates phantom empty folders.
+  // `remerge` (P0-1) is the exception: it is the recovery path for a
+  // tombstone-window reset (device offline >30 days) where the client
+  // MUST rebind idMap against a full pull or sync stops forever.
   const existingState = await SyncState.get();
-  if (existingState && existingState.initial_merge_done) {
+  if (existingState && existingState.initial_merge_done && !remerge) {
     console.log('[MarkSync/initialMerge] already done, skipping');
     return { ok: true, skipped: true, reason: 'already_done' };
   }
@@ -95,6 +98,14 @@ export async function initialMerge({ apiUrl, token }) {
   try {
     if (!apiUrl || !token) {
       return { ok: false, error: 'apiUrl and token are required' };
+    }
+
+    // Re-merge mode: the idMap may reference cloud ids that were purged
+    // with their tombstones — rebuild the whole binding from this run.
+    // Local bookmarks are untouched; only the mapping is rebuilt.
+    if (remerge) {
+      console.log('[MarkSync/initialMerge] re-merge mode – clearing idMap for a full rebind');
+      await IdMapStore.clear();
     }
 
     // ── 0.5  Local dedup (clean up any local duplicates before merge) ──
@@ -174,6 +185,74 @@ export async function initialMerge({ apiUrl, token }) {
         const newId = uuid();
         chromeIdToAssignedCloudId.set(l.chrome_id, newId);
         localToPush.push({ node: l, cloudId: newId });
+      }
+    }
+
+    // ── Re-merge fallback matching (P0-1) ─────────────────────────────
+    // After a long offline period a row may exist on BOTH sides but no
+    // longer match the full dedupe key (e.g. renamed on another device).
+    // Without this pass the row would be created twice → duplicates after
+    // every reset. Pair unmatched LOCAL url rows with unmatched CLOUD url
+    // rows by (root, parent_path, url) — name excluded — only when the
+    // pairing is unambiguous (exactly one candidate per side). Local
+    // fields win: the pair is pushed as `modified` so the server converges.
+    /** @type {object[]} re-merge modifications (local wins) */
+    const modifiedFallback = [];
+    if (remerge && localToPush.length) {
+      /** @type {Map<string, object[]>} */
+      const cloudPairKey = new Map();
+      for (const c of cloudList) {
+        if (c.deleted_at != null || matchedCloudIds.has(c.id)) continue;
+        if (c.type !== 'url' || !c.url) continue;
+        const k = `${c.root} ${cloudPaths.get(c.id) || ''} ${c.url}`;
+        if (!cloudPairKey.has(k)) cloudPairKey.set(k, []);
+        cloudPairKey.get(k).push(c);
+      }
+      /** @type {Map<string, object[]>} */
+      const localPairKey = new Map();
+      for (const e of localToPush) {
+        if (e.node.type !== 'url' || !e.node.url) continue;
+        const k = `${e.node.root} ${e.node.parent_path} ${e.node.url}`;
+        if (!localPairKey.has(k)) localPairKey.set(k, []);
+        localPairKey.get(k).push(e);
+      }
+      const pairedLocal = new Set();
+      let fallbackMatched = 0;
+      for (const [k, locals] of localPairKey) {
+        const clouds = cloudPairKey.get(k);
+        if (!clouds || clouds.length !== 1 || locals.length !== 1) continue;
+        const l = locals[0];
+        const c = clouds[0];
+        matchedCloudIds.add(c.id);
+        chromeToCloud.set(l.node.chrome_id, c.id);
+        chromeIdToAssignedCloudId.set(l.node.chrome_id, c.id);
+        await IdMapStore.set(c.id, {
+          chrome_id: l.node.chrome_id,
+          parent_cloud_id: c.parent_id || null,
+          name: l.node.name,
+          url: l.node.url,
+          type: l.node.type,
+          root: l.node.root,
+          position: l.node.position,
+          date_modified: Date.now(),
+          synced_at: serverTime,
+        });
+        modifiedFallback.push({
+          id: c.id,
+          name: l.node.name,
+          url: l.node.url,
+          date_modified: serverTime,
+        });
+        pairedLocal.add(l);
+        fallbackMatched++;
+      }
+      if (fallbackMatched > 0) {
+        const kept = localToPush.filter((e) => !pairedLocal.has(e));
+        localToPush.length = 0;
+        localToPush.push(...kept);
+        console.log(
+          `[MarkSync/initialMerge] re-merge fallback: ${fallbackMatched} row(s) re-paired by (root,path,url)`
+        );
       }
     }
 
@@ -304,10 +383,10 @@ export async function initialMerge({ apiUrl, token }) {
     await deduplicateLocalTree({ tag: '[MarkSync/initialMerge]' });
 
     let backendDeduped = 0;
-    if (pushAdded.length) {
+    if (pushAdded.length || modifiedFallback.length) {
       const pushRes = await callApi(apiUrl, token, '/sync/push', {
         method: 'POST',
-        body: { added: pushAdded, modified: [], removed: [] },
+        body: { added: pushAdded, modified: modifiedFallback, removed: [] },
       });
 
       // Handle backend deduplication: the server may return `deduped` when
@@ -352,6 +431,9 @@ export async function initialMerge({ apiUrl, token }) {
       last_pulled_at: serverTime,
       last_sync_at: serverTime,
       last_error: null,
+      // P0-1: a successful (re-)merge consumes any pending reset.
+      reset_pending: false,
+      failed_apply_streak: 0,
       remote_count: cloudList.filter((b) => b.deleted_at == null).length,
     });
 

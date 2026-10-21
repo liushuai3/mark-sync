@@ -34,6 +34,12 @@ function defaults() {
     last_error: null,
     last_conflicts: 0,
     initial_merge_done: false,
+    // P0-1: set when the server rejects `since` (tombstone window passed);
+    // the background layer must run initialMerge in re-merge mode.
+    reset_pending: false,
+    // P0-5: consecutive cycles where remote apply had failures; caps how
+    // long a bad row can hold the pull checkpoint back.
+    failed_apply_streak: 0,
   };
 }
 
