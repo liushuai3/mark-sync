@@ -4,6 +4,7 @@ import { useAuthStore } from './stores/auth.js';
 const routes = [
   { path: '/', name: 'landing', component: () => import('./views/LandingView.vue'), meta: { public: true } },
   { path: '/login', component: () => import('./views/LoginView.vue'), meta: { guest: true } },
+  { path: '/reset-password', component: () => import('./views/ResetPasswordView.vue'), meta: { guest: true } },
   {
     path: '/app',
     component: () => import('./layouts/MainLayout.vue'),

@@ -17,6 +17,9 @@
               <n-input v-model:value="loginForm.password" type="password" show-password-on="click" placeholder="密码" @keydown.enter.prevent="onLogin" />
             </n-form-item>
             <n-button type="primary" block :loading="loading" @click="onLogin">登录</n-button>
+            <div class="forgot">
+              <n-button text size="small" @click="$router.push('/reset-password')">忘记密码？</n-button>
+            </div>
           </n-form>
         </n-tab-pane>
         <n-tab-pane name="register" tab="注册">
@@ -57,6 +60,9 @@
             <n-input v-model:value="loginForm.password" type="password" show-password-on="click" placeholder="密码" @keydown.enter.prevent="onLogin" />
           </n-form-item>
           <n-button type="primary" block :loading="loading" @click="onLogin">登录</n-button>
+          <div class="forgot">
+            <n-button text size="small" @click="$router.push('/reset-password')">忘记密码？</n-button>
+          </div>
         </n-form>
       </template>
 
@@ -229,4 +235,5 @@ async function onRegister() {
 .footer { margin-top: 20px; font-size: 12px; color: #999; }
 .health.ok { color: #52c41a; }
 .health.err { color: #f5222d; }
+.forgot { text-align: right; margin-top: 8px; }
 </style>

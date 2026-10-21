@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { db, now, type User } from '../db.js';
-import { hashPassword, verifyPassword, signJwt } from '../lib/auth.js';
+import { hashPassword, verifyPassword, signJwt, verifyJwt } from '../lib/auth.js';
 import { config } from '../config.js';
 import { requireJwt, requireAuth, type AuthContext } from '../middleware/auth.js';
 import { rateLimit } from '../middleware/rate-limit.js';
@@ -17,9 +17,12 @@ const registerSchema = z.object({
   code: z.string().regex(/^\d{6}$/).optional(),
 });
 
+const PURPOSES = ['register', 'change_email', 'change_password', 'reset_password'] as const;
+type MailPurpose = (typeof PURPOSES)[number];
+
 const sendCodeSchema = z.object({
   email: z.string().email(),
-  purpose: z.enum(['register']).default('register'),
+  purpose: z.enum(PURPOSES).default('register'),
 });
 
 const loginSchema = z.object({
@@ -30,6 +33,18 @@ const loginSchema = z.object({
 const passwordChangeSchema = z.object({
   old_password: z.string().min(1),
   new_password: z.string().min(6).max(128),
+  code: z.string().regex(/^\d{6}$/).optional(),
+});
+
+const changeEmailSchema = z.object({
+  email: z.string().email(),
+  code: z.string().regex(/^\d{6}$/),
+});
+
+const resetPasswordSchema = z.object({
+  email: z.string().email(),
+  code: z.string().regex(/^\d{6}$/),
+  new_password: z.string().min(6).max(128),
 });
 
 const getUserByUsername = db.prepare<[string], User>('SELECT * FROM users WHERE username = ?');
@@ -39,6 +54,7 @@ const insertUser = db.prepare(
   'INSERT INTO users (username, email, password_hash, is_admin, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
 );
 const updatePasswordStmt = db.prepare('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?');
+const updateUserEmail = db.prepare('UPDATE users SET email = ?, updated_at = ? WHERE id = ?');
 const getDbSetting = db.prepare<[string], { value: string }>(
   'SELECT value FROM settings WHERE key = ? LIMIT 1'
 );
@@ -148,17 +164,51 @@ app.post('/send-code', rateLimit('send-code', 3, 60_000), async (c) => {
     return c.json({ ok: false, error: '服务器未配置 SMTP，无法发送邮件', code: 'SMTP_NOT_CONFIGURED' }, 503);
   }
 
-  // 注册开关检查
-  const userCount = countUsers.get()?.c || 0;
-  if (userCount > 0) {
-    const dbSetting = getDbSetting.get('registration_open');
-    if (!dbSetting || dbSetting.value !== 'true') {
-      return c.json({ ok: false, error: '注册已关闭', code: 'REG_CLOSED' }, 403);
+  // 不同用途的前置校验
+  if (purpose === 'register') {
+    // 注册开关检查
+    const userCount = countUsers.get()?.c || 0;
+    if (userCount > 0) {
+      const dbSetting = getDbSetting.get('registration_open');
+      if (!dbSetting || dbSetting.value !== 'true') {
+        return c.json({ ok: false, error: '注册已关闭', code: 'REG_CLOSED' }, 403);
+      }
     }
-  }
-
-  if (getUserByEmail.get(email)) {
-    return c.json({ ok: false, error: '邮箱已被注册', code: 'EMAIL_CONFLICT' }, 409);
+    if (getUserByEmail.get(email)) {
+      return c.json({ ok: false, error: '邮箱已被注册', code: 'EMAIL_CONFLICT' }, 409);
+    }
+  } else if (purpose === 'change_email') {
+    // 需要登录，且目标邮箱未被其他人使用
+    const authUser = await resolveJwtUser(c);
+    if (!authUser) {
+      return c.json({ ok: false, error: '未登录', code: 'UNAUTHORIZED' }, 401);
+    }
+    const existing = getUserByEmail.get(email);
+    if (existing && existing.id !== authUser.id) {
+      return c.json({ ok: false, error: '邮箱已被其他账号使用', code: 'EMAIL_CONFLICT' }, 409);
+    }
+    if (authUser.email && authUser.email === email) {
+      return c.json({ ok: false, error: '新邮箱与当前邮箱相同', code: 'EMAIL_UNCHANGED' }, 400);
+    }
+  } else if (purpose === 'change_password') {
+    // 需要登录，且邮箱必须与当前账号绑定一致
+    const authUser = await resolveJwtUser(c);
+    if (!authUser) {
+      return c.json({ ok: false, error: '未登录', code: 'UNAUTHORIZED' }, 401);
+    }
+    if (!authUser.email) {
+      return c.json({ ok: false, error: '当前账号未绑定邮箱，请先绑定', code: 'EMAIL_NOT_BOUND' }, 400);
+    }
+    if (authUser.email !== email) {
+      return c.json({ ok: false, error: '邮箱与当前账号不匹配', code: 'EMAIL_MISMATCH' }, 400);
+    }
+  } else if (purpose === 'reset_password') {
+    // 无需登录，邮箱必须属于某个账号（为防枚举，不存在也返回成功假象，但不实际发送）
+    const target = getUserByEmail.get(email);
+    if (!target) {
+      // 不发送，但返回成功避免枚举
+      return c.json({ ok: true, data: { sent: true, expires_in: 300, cooldown: 60 } });
+    }
   }
 
   const ip =
@@ -192,7 +242,7 @@ app.post('/send-code', rateLimit('send-code', 3, 60_000), async (c) => {
   insertEmailCode.run(email, code, purpose, ip, nowTs, expiresAt);
 
   try {
-    await sendVerificationEmail(email, code);
+    await sendVerificationEmail(email, code, purpose);
   } catch (err: any) {
     return c.json({ ok: false, error: '邮件发送失败，请稍后重试', code: 'MAIL_SEND_FAILED', detail: err?.message }, 500);
   }
@@ -270,12 +320,71 @@ app.put('/password', requireJwt, async (c) => {
   if (!parsed.success) {
     return c.json({ ok: false, error: parsed.error.issues[0].message, code: 'INVALID_INPUT' }, 400);
   }
-  const { old_password, new_password } = parsed.data;
+  const { old_password, new_password, code } = parsed.data;
   const ok = await verifyPassword(user.password_hash, old_password);
   if (!ok) return c.json({ ok: false, error: 'Old password incorrect', code: 'UNAUTHORIZED' }, 401);
+
+  // 如果用户绑定了邮箱，则强制邮箱验证
+  if (user.email) {
+    if (!code) {
+      return c.json({ ok: false, error: '需要邮箱验证码', code: 'CODE_REQUIRED' }, 400);
+    }
+    const check = consumeEmailCode(user.email, 'change_password', code);
+    if (check.error) {
+      return c.json({ ok: false, error: check.error, code: check.codeStr }, check.status as any);
+    }
+  }
+
   const newHash = await hashPassword(new_password);
   updatePasswordStmt.run(newHash, now(), user.id);
   return c.json({ ok: true, data: { changed: true } });
+});
+
+// 修改邮箱（必须登录 + 新邮箱验证码）
+app.put('/email', requireJwt, async (c) => {
+  const user = c.get('user' as never) as User;
+  const parsed = changeEmailSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) {
+    return c.json({ ok: false, error: parsed.error.issues[0].message, code: 'INVALID_INPUT' }, 400);
+  }
+  const { email, code } = parsed.data;
+
+  if (user.email === email) {
+    return c.json({ ok: false, error: '新邮箱与当前邮箱相同', code: 'EMAIL_UNCHANGED' }, 400);
+  }
+  const existing = getUserByEmail.get(email);
+  if (existing && existing.id !== user.id) {
+    return c.json({ ok: false, error: '邮箱已被其他账号使用', code: 'EMAIL_CONFLICT' }, 409);
+  }
+
+  const check = consumeEmailCode(email, 'change_email', code);
+  if (check.error) {
+    return c.json({ ok: false, error: check.error, code: check.codeStr }, check.status as any);
+  }
+
+  updateUserEmail.run(email, now(), user.id);
+  const updated = getUserById.get(user.id)!;
+  return c.json({ ok: true, data: publicUser(updated) });
+});
+
+// 忘记密码：无需登录，邮箱 + 验证码 + 新密码
+app.post('/reset-password', rateLimit('reset-password', 5, 600_000), async (c) => {
+  const parsed = resetPasswordSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) {
+    return c.json({ ok: false, error: parsed.error.issues[0].message, code: 'INVALID_INPUT' }, 400);
+  }
+  const { email, code, new_password } = parsed.data;
+  const target = getUserByEmail.get(email);
+  if (!target) {
+    return c.json({ ok: false, error: '邮箱不存在或验证码错误', code: 'INVALID_INPUT' }, 400);
+  }
+  const check = consumeEmailCode(email, 'reset_password', code);
+  if (check.error) {
+    return c.json({ ok: false, error: check.error, code: check.codeStr }, check.status as any);
+  }
+  const newHash = await hashPassword(new_password);
+  updatePasswordStmt.run(newHash, now(), target.id);
+  return c.json({ ok: true, data: { reset: true } });
 });
 
 /**
@@ -305,6 +414,35 @@ function publicUser(u: User) {
     is_admin: !!u.is_admin,
     created_at: u.created_at,
   };
+}
+
+// 从 Authorization: Bearer <jwt> 提取当前用户，未登录返回 null（send-code 不能强制中间件，reset_password 无需登录）
+async function resolveJwtUser(c: any): Promise<User | null> {
+  const h = c.req.header('Authorization') || c.req.header('authorization');
+  if (!h) return null;
+  const m = h.match(/^Bearer\s+(.+)$/i);
+  if (!m) return null;
+  const raw = m[1].trim();
+  if (raw.startsWith('mks_')) return null;
+  const payload = await verifyJwt(raw);
+  if (!payload) return null;
+  return getUserById.get(payload.userId) ?? null;
+}
+
+// 验证邮箱验证码。成功返回 null，失败返回错误 Response
+function consumeEmailCode(email: string, purpose: MailPurpose, code: string): { error?: string; codeStr?: string; status?: number } {
+  const rec = getLatestEmailCode.get(email, purpose);
+  const nowTs = now();
+  if (!rec) return { error: '验证码不存在，请先获取', codeStr: 'CODE_NOT_FOUND', status: 400 };
+  if (rec.used_at) return { error: '验证码已使用，请重新获取', codeStr: 'CODE_USED', status: 400 };
+  if (rec.expires_at < nowTs) return { error: '验证码已过期，请重新获取', codeStr: 'CODE_EXPIRED', status: 400 };
+  if (rec.attempts >= 5) return { error: '验证码尝试次数过多，请重新获取', codeStr: 'CODE_ATTEMPTS_EXCEEDED', status: 429 };
+  if (rec.code !== code) {
+    incEmailCodeAttempts.run(rec.id);
+    return { error: '验证码错误', codeStr: 'CODE_MISMATCH', status: 400 };
+  }
+  markEmailCodeUsed.run(nowTs, rec.id);
+  return {};
 }
 
 export default app;

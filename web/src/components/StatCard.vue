@@ -25,7 +25,14 @@ defineProps({
 </script>
 
 <style scoped>
-.stat-card { border-radius: 10px; }
+.stat-card {
+  border-radius: 10px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+}
 .content { display: flex; justify-content: space-between; align-items: center; }
 .title { color: #999; font-size: 13px; margin-bottom: 6px; }
 .value { font-size: 28px; font-weight: 600; }

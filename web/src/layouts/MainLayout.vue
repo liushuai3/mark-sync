@@ -11,7 +11,7 @@
       bordered
     >
       <div class="brand">
-        <n-icon size="24" :color="themeStore.dark ? '#fff' : '#2196F3'"><BookmarkOutline /></n-icon>
+        <img src="/logo.png" alt="MarkSync" class="brand-logo" />
         <span v-if="!collapsed" class="brand-name">MarkSync</span>
       </div>
       <n-menu
@@ -45,6 +45,7 @@
                 {{ auth.user?.username || '未登录' }}
               </n-button>
             </n-dropdown>
+            <AccountModal v-model:show="accountModal.show" :mode="accountModal.mode" />
           </n-space>
         </n-space>
       </n-layout-header>
@@ -75,10 +76,13 @@ import {
   PeopleOutline,
   ExtensionPuzzleOutline,
   ShieldCheckmarkOutline,
+  MailOutline,
+  LockClosedOutline,
 } from '@vicons/ionicons5';
 import { useAuthStore } from '../stores/auth.js';
 import { useThemeStore } from '../stores/theme.js';
 import { health } from '../api/client.js';
+import AccountModal from '../components/AccountModal.vue';
 
 const router = useRouter();
 const route = useRoute();
@@ -103,8 +107,15 @@ const menuOptions = [
 ];
 
 const userMenu = [
+  { label: '我的信息', key: 'my-info', icon: renderIcon(PersonCircleOutline) },
+  { type: 'divider', key: 'd0' },
+  { label: '修改邮箱', key: 'change-email', icon: renderIcon(MailOutline) },
+  { label: '修改密码', key: 'change-password', icon: renderIcon(LockClosedOutline) },
+  { type: 'divider', key: 'd1' },
   { label: '退出登录', key: 'logout', icon: renderIcon(LogOutOutline) },
 ];
+
+const accountModal = ref({ show: false, mode: 'info' });
 
 const activeKey = computed(() => route.name || 'dashboard');
 const visibleMenuOptions = computed(() =>
@@ -123,6 +134,12 @@ function onUserMenu(key) {
   if (key === 'logout') {
     auth.logout();
     router.replace('/login');
+  } else if (key === 'my-info') {
+    accountModal.value = { show: true, mode: 'info' };
+  } else if (key === 'change-email') {
+    accountModal.value = { show: true, mode: 'email' };
+  } else if (key === 'change-password') {
+    accountModal.value = { show: true, mode: 'password' };
   }
 }
 
@@ -149,10 +166,17 @@ onMounted(async () => {
   height: 56px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   padding: 0 20px;
   border-bottom: 1px solid var(--n-border-color);
   font-weight: 600;
+}
+.brand-logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  object-fit: contain;
 }
 .brand-name { font-size: 18px; }
 .header {

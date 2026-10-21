@@ -44,6 +44,10 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = u;
   }
 
+  function setUser(u) {
+    user.value = u;
+  }
+
   function logout() {
     jwt.value = null;
     user.value = null;
@@ -58,5 +62,5 @@ export const useAuthStore = defineStore('auth', () => {
     }
   });
 
-  return { user, jwt, isAuthenticated, hydrated, hydrate, login, register, logout };
+  return { user, jwt, isAuthenticated, hydrated, hydrate, login, register, logout, setUser };
 });

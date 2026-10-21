@@ -7,6 +7,8 @@ export const authApi = {
   logout: () => request('/auth/logout', { method: 'POST' }),
   me: () => request('/auth/me'),
   changePassword: (body) => request('/auth/password', { method: 'PUT', body }),
+  changeEmail: (body) => request('/auth/email', { method: 'PUT', body }),
+  resetPassword: (body) => request('/auth/reset-password', { method: 'POST', body }),
   sendCode: (email, purpose = 'register') =>
     request('/auth/send-code', { method: 'POST', body: { email, purpose } }),
 };
