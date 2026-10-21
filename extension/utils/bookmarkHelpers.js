@@ -136,6 +136,9 @@ export function findEmptyFolders(tree) {
     for (const node of nodes) {
       const id = String(node.id);
       if (ROOTS.has(id) || node.url) continue;
+      // P0-6: separators have no url and no children — never treat them
+      // as (empty) folders or the cleanup below would eat user separators.
+      if (node.type === 'separator') continue;
       // Folder with zero direct children → empty leaf.
       if (!node.children || node.children.length === 0) {
         result.push(id);
@@ -218,6 +221,81 @@ export async function callApi(apiUrl, token, path, opts = {}) {
     throw err;
   }
   return json.data;
+}
+
+/**
+ * Rows per single /sync/push request. The server caps sync bodies at 10MB;
+ * ~400 rows stay far below that even with long titles/urls, and keeps a
+ * huge bookmark import from turning into one permanently-rejected 413
+ * payload (which used to fail every cycle forever).
+ */
+const PUSH_BATCH_SIZE = 400;
+
+/**
+ * POST /sync/push with client-side batching (P1-4).
+ *
+ * The payload is flattened into one ordered row list, sliced into batches
+ * and POSTed sequentially; ordering is preserved so a parent always
+ * precedes its children across batch boundaries (server inserts
+ * parent-first anyway). If the server answers 413 the batch is retried
+ * with a binary split, so a single oversized row can never wedge sync.
+ *
+ * Results (counts / conflicts / deduped / server_time) are merged into a
+ * single response-shaped object so callers can treat this as one push.
+ *
+ * @param {string} apiUrl
+ * @param {string} token
+ * @param {{added?: object[], modified?: object[], removed?: object[]}} payload
+ * @returns {Promise<{added_count: number, modified_count: number, removed_count: number, conflicts: object[], deduped: object[], server_time: number}>}
+ */
+export async function pushInBatches(apiUrl, token, { added = [], modified = [], removed = [] } = {}) {
+  const rows = [
+    ...added.map((r) => ({ kind: 'added', r })),
+    ...modified.map((r) => ({ kind: 'modified', r })),
+    ...removed.map((r) => ({ kind: 'removed', r })),
+  ];
+  const merged = {
+    added_count: 0,
+    modified_count: 0,
+    removed_count: 0,
+    conflicts: [],
+    deduped: [],
+    server_time: 0,
+  };
+  if (!rows.length) return merged;
+
+  async function post(batch) {
+    const body = { added: [], modified: [], removed: [] };
+    for (const { kind, r } of batch) body[kind].push(r);
+    const res = await callApi(apiUrl, token, '/sync/push', { method: 'POST', body });
+    merged.added_count += Number(res?.added_count) || 0;
+    merged.modified_count += Number(res?.modified_count) || 0;
+    merged.removed_count += Number(res?.removed_count) || 0;
+    if (Array.isArray(res?.conflicts)) merged.conflicts.push(...res.conflicts);
+    if (Array.isArray(res?.deduped)) merged.deduped.push(...res.deduped);
+    if (Number(res?.server_time)) merged.server_time = Number(res.server_time);
+    return res;
+  }
+
+  async function postWithSplit(batch) {
+    try {
+      await post(batch);
+    } catch (err) {
+      if (err && err.status === 413 && batch.length > 1) {
+        const mid = Math.ceil(batch.length / 2);
+        console.warn(`[MarkSync/push] payload too large – splitting batch of ${batch.length}`);
+        await postWithSplit(batch.slice(0, mid));
+        await postWithSplit(batch.slice(mid));
+      } else {
+        throw err;
+      }
+    }
+  }
+
+  for (let i = 0; i < rows.length; i += PUSH_BATCH_SIZE) {
+    await postWithSplit(rows.slice(i, i + PUSH_BATCH_SIZE));
+  }
+  return merged;
 }
 
 /**
@@ -335,6 +413,11 @@ export function flattenLocalTree(tree) {
       for (const child of node.children || []) walk(child, null, '', null);
       return;
     }
+    // P0-6: bookmark separators are not part of the sync protocol. They
+    // have no url and no children; the old `!node.url` check turned them
+    // into nameless "folders" that were uploaded, re-created on other
+    // devices, and tripped the dedupe pass. Skip them entirely.
+    if (node.type === 'separator') return;
     if (!root) return; // Defensive: unknown root
 
     const isFolder = !node.url;
@@ -442,6 +525,7 @@ export default {
   rootFromChromeId,
   rootChromeIdFor,
   callApi,
+  pushInBatches,
   getBookmarkTree,
   createBookmark,
   updateBookmark,

@@ -35,6 +35,7 @@ import { cleanupEmptyFolders } from './emptyFolderCleanup.js';
 import { deduplicateLocalTree } from './localDedup.js';
 import {
   callApi,
+  pushInBatches,
   getBookmarkTree,
   createBookmark,
   updateBookmark,
@@ -105,7 +106,7 @@ export async function syncCycle({ apiUrl, token, manual = false }) {
     const since = Number(state.last_pulled_at) || 0;
 
     // ── 0.5  Local dedup (before sync, clean up any local duplicates) ──
-    await deduplicateLocalTree({ tag });
+    await deduplicateLocalTree({ tag, remove: false });
 
     // ── 1. Pull remote deltas ────────────────────────────────────────
     console.log(`${tag} step1: GET /sync/pull?since=${since}`);
@@ -140,11 +141,23 @@ export async function syncCycle({ apiUrl, token, manual = false }) {
     const remoteApplied = applyResult.applied;
     const applyFailures = applyResult.failures;
 
+    // P1-8: checkpoint idMap after the apply phase. The MV3 service worker
+    // can be killed at any await; without this checkpoint a crash between
+    // here and the end-of-cycle save discarded every mapping the apply
+    // phase had written, forcing content-dedup self-healing on the next
+    // cycle (which cannot heal renamed rows).
+    await IdMapStore.save();
+
     // ── 2.5  Local dedup (after remote creates, they may introduce duplicates) ──
-    await deduplicateLocalTree({ tag });
+    await deduplicateLocalTree({ tag, remove: false });
 
     // ── 3. Build local diff (two-pass: assign cloud ids, then diff) ──
     const { added, modified, removed } = await buildLocalDiff(serverTime);
+
+    // P1-8: checkpoint before the network push — the diff phase may have
+    // minted and staged dozens of new cloud ids; persisting them here
+    // means a kill during the push cannot cause id re-minting.
+    await IdMapStore.save();
 
     // ── 4. Push local diff ───────────────────────────────────────────
     let conflicts = [];
@@ -154,10 +167,10 @@ export async function syncCycle({ apiUrl, token, manual = false }) {
       console.log(
         `${tag} step4: POST /sync/push added=${added.length} modified=${modified.length} removed=${removed.length}`
       );
-      const pushRes = await callApi(apiUrl, token, '/sync/push', {
-        method: 'POST',
-        body: { added, modified, removed },
-      });
+      // P1-4: batched push — client-side chunking keeps every request far
+      // under the server's 10MB body cap, and a 413 response is retried
+      // with a binary split so one oversized payload can never wedge sync.
+      const pushRes = await pushInBatches(apiUrl, token, { added, modified, removed });
       conflicts = Array.isArray(pushRes?.conflicts) ? pushRes.conflicts : [];
       pushCounts = {
         added_count: Number(pushRes?.added_count) || 0,
@@ -518,10 +531,18 @@ async function buildLocalDiff(now) {
   const allEntries = await IdMapStore.all();
   /** @type {Map<string, string>} dedupe_key -> cloud_id */
   const dedupeToCloudId = new Map();
+  // P2: build a cloud_id → name index once. The old code ran
+  // `allEntries.find(...)` per entry — O(n²), i.e. ~10⁸ comparisons for a
+  // 10k-bookmark library, which alone blew the SRS 3s budget and made
+  // every cycle long enough to risk the MV3 idle kill.
+  const nameByCloudId = new Map();
+  for (const x of allEntries) {
+    if (x && x.cloud_id) nameByCloudId.set(x.cloud_id, x.name || '');
+  }
   for (const e of allEntries) {
     if (!e || !e.cloud_id) continue;
     const parentPath = e.parent_cloud_id
-      ? (allEntries.find((x) => x && x.cloud_id === e.parent_cloud_id)?.name || '')
+      ? nameByCloudId.get(e.parent_cloud_id) || ''
       : '';
     const key = `${e.root || ''}\u0000${parentPath}\u0000${e.name || ''}\u0000${e.url || ''}`;
     if (!dedupeToCloudId.has(key)) {

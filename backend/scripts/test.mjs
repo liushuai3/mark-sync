@@ -326,6 +326,8 @@ async function main() {
     assert(b4After.version >= 2, 'modify: version incremented (>=2)');
     assert(b4After.name === 'Node.js', 'modify: name applied');
 
+    // P1-7: LWW is now server-arrival order — an "older" client timestamp
+    // is accepted because client clocks are no longer trusted.
     const modOlder = await req('POST', '/api/sync/push', {
       token: apiToken,
       body: {
@@ -336,11 +338,19 @@ async function main() {
         removed: [],
       },
     });
-    assert(modOlder.json.data.modified_count === 0, 'modify older date_modified → rejected');
     assert(
-      modOlder.json.data.conflicts.length === 1 &&
-        modOlder.json.data.conflicts[0].reason === 'newer_exists',
-      'modify older → conflicts newer_exists'
+      modOlder.json.data.modified_count === 1,
+      'modify with older client timestamp → accepted (server-arrival LWW)'
+    );
+    assert(modOlder.json.data.conflicts.length === 0, 'modify older client ts → no conflicts');
+
+    // Server stamps date_modified itself; the new stamp must be >= the
+    // stamp of the previous accepted write.
+    const pullStamp = await req('GET', '/api/sync/pull', { token: apiToken });
+    const stamped = pullStamp.json.data.bookmarks.find((b) => b.id === 'uuid-url-3');
+    assert(
+      stamped && stamped.name === 'STALE' && stamped.date_modified >= b4After.date_modified,
+      `modify: server-stamped date_modified >= previous (${stamped && stamped.date_modified} vs ${b4After.date_modified})`
     );
 
     // Modify against a tombstone

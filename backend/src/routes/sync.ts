@@ -379,15 +379,13 @@ app.post('/push', async (c) => {
         conflicts.push({ id: m.id, reason: 'already_deleted' });
         continue;
       }
-      const dbDm = dbRow.date_modified ?? 0;
-      if (m.date_modified < dbDm) {
-        conflicts.push({
-          id: m.id,
-          reason: 'newer_exists',
-          server_date_modified: dbDm,
-        });
-        continue;
-      }
+      // P1-7: LWW is decided by SERVER arrival order, not client clocks.
+      // The old `m.date_modified < dbDm` check compared clocks across
+      // devices (and against web-admin edits that were already
+      // server-stamped) — a device with a fast clock always won and web
+      // edits could be overwritten by stale extension pushes. The server
+      // now stamps `date_modified` itself on every accepted write; the
+      // client-supplied value is kept only for diagnostics upstream.
 
       // Build partial update: only fields present in payload change.
       const nextName = m.name !== undefined ? m.name : dbRow.name;
@@ -409,7 +407,7 @@ app.post('/push', async (c) => {
         nextUrl,
         nextParent,
         nextPos,
-        m.date_modified,
+        ts, // P1-7: server-arrival stamp
         ts,
         m.id,
         user.id
@@ -427,7 +425,8 @@ app.post('/push', async (c) => {
             SET deleted_at = ?, date_modified = ?,
                 server_updated_at = ?, version = version + 1
           WHERE id = ? AND user_id = ?`
-      ).run(ts, r.date_modified, ts, r.id, user.id);
+        // P1-7: server-arrival stamp, same rationale as `modified`.
+      ).run(ts, ts, ts, r.id, user.id);
       removedCount++;
     }
   });

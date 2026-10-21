@@ -41,6 +41,7 @@ import { uuid } from './uuid.js';
 import { deduplicateLocalTree } from './localDedup.js';
 import {
   callApi,
+  pushInBatches,
   getBookmarkTree,
   createBookmark,
   flattenLocalTree,
@@ -109,7 +110,7 @@ export async function initialMerge({ apiUrl, token, remerge = false }) {
     }
 
     // ── 0.5  Local dedup (clean up any local duplicates before merge) ──
-    await deduplicateLocalTree({ tag: '[MarkSync/initialMerge]' });
+    await deduplicateLocalTree({ tag: '[MarkSync/initialMerge]', remove: false });
 
     // Step 1 — pull full remote state.
     const pullData = await callApi(apiUrl, token, '/sync/pull');
@@ -300,15 +301,18 @@ export async function initialMerge({ apiUrl, token, remerge = false }) {
     // multi-browser initial merges.
     let cloudDedupBound = 0;
     const trulyUnmatched = [];
+    // P2: reverse index cloud_id → chrome_id. The old code linear-scanned
+    // chromeToCloud per cloud row (O(n²) on large clouds).
+    const cloudToPrimaryChrome = new Map();
+    for (const [chId, clId] of chromeToCloud) {
+      if (!cloudToPrimaryChrome.has(clId)) cloudToPrimaryChrome.set(clId, chId);
+    }
     for (const c of cloudUnmatched) {
       const key = dedupeKey(c.root, cloudPaths.get(c.id) || '', c.name, c.url);
       const cloudAlreadyMatched = cloudByKey.get(key);
       if (cloudAlreadyMatched && matchedCloudIds.has(cloudAlreadyMatched.id)) {
-        // Cloud duplicate — find the chrome_id already bound to the primary cloud row.
-        let primaryChrome = null;
-        for (const [chId, clId] of chromeToCloud) {
-          if (clId === cloudAlreadyMatched.id) { primaryChrome = chId; break; }
-        }
+        // Cloud duplicate — chrome_id already bound to the primary cloud row.
+        const primaryChrome = cloudToPrimaryChrome.get(cloudAlreadyMatched.id) || null;
         if (primaryChrome) {
           await IdMapStore.set(c.id, {
             chrome_id: primaryChrome,
@@ -380,13 +384,19 @@ export async function initialMerge({ apiUrl, token, remerge = false }) {
     // Step 6 — push locally-new bookmarks.
 
     // ── 5.5  Local dedup (cloud-only creates may have introduced duplicates) ──
-    await deduplicateLocalTree({ tag: '[MarkSync/initialMerge]' });
+    await deduplicateLocalTree({ tag: '[MarkSync/initialMerge]', remove: false });
+
+    // P1-8: checkpoint the freshly built idMap before the push round-trip —
+    // a service-worker kill during the push must not lose the bindings.
+    await IdMapStore.save();
 
     let backendDeduped = 0;
     if (pushAdded.length || modifiedFallback.length) {
-      const pushRes = await callApi(apiUrl, token, '/sync/push', {
-        method: 'POST',
-        body: { added: pushAdded, modified: modifiedFallback, removed: [] },
+      // P1-4: batched push (chunked + 413 binary split).
+      const pushRes = await pushInBatches(apiUrl, token, {
+        added: pushAdded,
+        modified: modifiedFallback,
+        removed: [],
       });
 
       // Handle backend deduplication: the server may return `deduped` when

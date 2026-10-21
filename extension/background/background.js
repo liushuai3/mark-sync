@@ -17,6 +17,7 @@ import * as IdMapStore from '../utils/idMapStore.js';
 import * as SyncState from '../utils/syncState.js';
 import { initialMerge } from '../utils/initialMerge.js';
 import { syncCycle } from '../utils/syncCycle.js';
+import { deduplicateLocalTree } from '../utils/localDedup.js';
 import {
   flattenLocalTree,
   getBookmarkTree,
@@ -352,6 +353,35 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
         case 'FORCE_UPLOAD': {
           const res = await forceUpload();
           sendResponse(res);
+          break;
+        }
+
+        // P0-7: destructive duplicate cleanup is user-triggered only
+        // (popup "清理重复" button). The automatic sync cycle never removes
+        // duplicates — anything deleted here is pushed as a tombstone to
+        // every device on the next sync, so it needs an explicit opt-in.
+        case 'DEDUP_NOW': {
+          if (globalThis.__marksyncSyncing) {
+            sendResponse({ ok: false, error: 'sync in progress, try again later' });
+            break;
+          }
+          globalThis.__marksyncSyncing = true;
+          setBadge('syncing');
+          try {
+            const res = await deduplicateLocalTree({
+              tag: '[MarkSync/dedup:manual]',
+              remove: true,
+            });
+            const removed = (res && res.removed) || 0;
+            if (removed > 0) setBadge('success', removed);
+            else setBadge('no-op');
+            sendResponse({ ok: true, removed });
+          } catch (err) {
+            setBadge('error');
+            sendResponse({ ok: false, error: String((err && err.message) || err) });
+          } finally {
+            globalThis.__marksyncSyncing = false;
+          }
           break;
         }
 

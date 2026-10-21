@@ -85,6 +85,8 @@ async function mergeChildrenRecursive({ victimId, survivorId, tag }) {
   const toProcess = [...vChildren];
 
   for (const vChild of toProcess) {
+    // P0-6: never touch separators during a merge.
+    if (vChild.type === 'separator') continue;
     const childKey = `${vChild.title || ''}\u0000${vChild.url || ''}`;
     const sMatch = sIndex.get(childKey);
 
@@ -178,10 +180,16 @@ async function mergeFolderInto({ victimId, survivorId, tag }) {
 }
 
 /**
- * @param {{ tag: string, verbose?: boolean }} opts
- * @returns {Promise<{removed: number}>}
+ * @param {{ tag: string, verbose?: boolean, remove?: boolean }} opts
+ *   `remove` (P0-7, default **false**) gates the destructive step. With the
+ *   default the function only DETECTS duplicate groups and reports them —
+ *   the automatic sync cycle must never delete user bookmarks: the old
+ *   auto-remove merged same-(parent,name,url) siblings every cycle and the
+ *   deletions were then propagated to every device as tombstones. Removal
+ *   is an explicit user action now (popup "清理重复" → DEDUP_NOW).
+ * @returns {Promise<{removed: number, found?: number}>}
  */
-export async function deduplicateLocalTree({ tag, verbose = true }) {
+export async function deduplicateLocalTree({ tag, verbose = true, remove = false }) {
   const t0 = Date.now();
   const tree = await getBookmarkTree();
   discoverRoots(tree);
@@ -245,6 +253,17 @@ export async function deduplicateLocalTree({ tag, verbose = true }) {
   if (dupGroups.length === 0) {
     console.log(`${tag} dedup: done — nothing to remove`);
     return { removed: 0 };
+  }
+
+  // P0-7: report-only mode (automatic cycles). Deletion needs the user's
+  // explicit opt-in via the popup — duplicates are legal, and anything
+  // removed here becomes a cloud tombstone that wipes it on every device.
+  if (!remove) {
+    console.log(
+      `${tag} dedup: ${dupGroups.length} duplicate group(s) detected – ` +
+        'report-only mode, nothing removed (manual cleanup required)'
+    );
+    return { removed: 0, found: dupGroups.length };
   }
 
   // Sort groups by depth: fewer path segments = shallower = process first.

@@ -189,6 +189,30 @@ async function handleSyncNow() {
   }
 }
 
+// P0-7: destructive duplicate cleanup — explicit user action only.
+async function handleDedup() {
+  const btn = document.getElementById('dedupBtn');
+  const okConfirm = confirm(
+    '将删除本地重复书签（同文件夹同名同网址，重复的文件夹会合并内容后删除）。\n删除会同步到所有已连接的设备，且无法恢复。\n\n确定继续？'
+  );
+  if (!okConfirm) return;
+  setLoading(btn, true);
+  showToast('正在清理重复项...', 'info', 60_000);
+  try {
+    const resp = await sendMessage({ type: 'DEDUP_NOW' });
+    if (!resp || resp.ok === false) {
+      throw new Error((resp && resp.error) || '清理失败');
+    }
+    const removed = resp.removed || 0;
+    showToast(removed > 0 ? `已清理 ${removed} 个重复项，将在下次同步时推送到云端` : '没有发现重复项', 'success', 5000);
+    await refreshState();
+  } catch (err) {
+    showToast(`错误：${err.message || err}`, 'err', 5000);
+  } finally {
+    setLoading(btn, false);
+  }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   const cfg = await getConfig();
   const apiUrl = (cfg.marksync_api_url || '').trim();
@@ -220,6 +244,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (!configured) return;
 
   document.getElementById('syncNowBtn').addEventListener('click', handleSyncNow);
+  const dedupBtn = document.getElementById('dedupBtn');
+  if (dedupBtn) dedupBtn.addEventListener('click', handleDedup);
 
   checkHealth();
   await refreshState();
