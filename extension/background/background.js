@@ -37,15 +37,19 @@ const BADGE_CLEAR_MS = 2500; // FR-11.2
 
 // ─── Config ────────────────────────────────────────────────────────────
 // Keys are the v2 keys used by popup/options.js (`marksync_api_url`,
-// `marksync_token`) in chrome.storage.sync — do NOT invent new keys.
+// `marksync_token`, `autoSync`) in chrome.storage.sync — do NOT invent new keys.
 async function getConfig() {
   return new Promise((resolve) => {
     chrome.storage.sync.get(
-      ['marksync_api_url', 'marksync_token'],
+      ['marksync_api_url', 'marksync_token', 'autoSync'],
       (state) => {
         resolve({
           apiUrl: (state && state.marksync_api_url) || '',
           token: (state && state.marksync_token) || '',
+          // P0-fix: the options page's "启用自动同步" checkbox writes this
+          // key, but the background never read it — the alarm ran a sync
+          // cycle every 5 minutes no matter what the switch said.
+          autoSync: !!(state && state.autoSync),
         });
       }
     );
@@ -200,13 +204,24 @@ async function runSyncCycle({ manual = false } = {}) {
 }
 
 /**
- * Run a scheduled (non-manual) cycle immediately — used for contexts where
- * execution is guaranteed (onInstalled, jitter-alarm tick).
+ * Run a scheduled (non-manual) cycle — the ONLY path gated by the
+ * options-page 「启用自动同步」 switch (`autoSync` in storage.sync, default
+ * OFF). Manual actions (立即同步 / 强制覆盖 / 合并 / 清理重复) are never
+ * gated by it. The switch is read on every tick, so flipping it in options
+ * takes effect on the next alarm without re-arming anything.
  */
 function runScheduledCycle() {
-  runSyncCycle({ manual: false }).catch((err) => {
-    console.error('[MarkSync/background] scheduled run error', err);
-  });
+  getConfig()
+    .then(({ autoSync }) => {
+      if (!autoSync) {
+        console.log('[MarkSync/background] auto-sync disabled in options; scheduled run skipped');
+        return;
+      }
+      return runSyncCycle({ manual: false });
+    })
+    .catch((err) => {
+      console.error('[MarkSync/background] scheduled run error', err);
+    });
 }
 
 /**
