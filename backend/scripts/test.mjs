@@ -548,6 +548,15 @@ async function main() {
       'second force: exactly the forced row is active (prior rows tombstoned)'
     );
 
+    section('sync/count — live active count (popup realtime display)');
+    const cnt = await req('GET', '/api/sync/count', { token: apiToken });
+    assert(cnt.status === 200 && cnt.json.ok, 'sync/count responds');
+    assert(
+      cnt.json.data && cnt.json.data.count === 1,
+      `sync/count: live active count is 1 after second force (got ${cnt.json.data && cnt.json.data.count})`
+    );
+    assert(typeof cnt.json.data.server_time === 'number', 'sync/count returns server_time');
+
     section('Token revocation');
     const revoke = await req('DELETE', `/api/tokens/${tokenId}`, { token: jwt });
     assert(revoke.json.ok, 'revoke token');

@@ -59,6 +59,11 @@ const selectAllForPull = db.prepare<[number], Bookmark>(
 const selectSincePull = db.prepare<[number, number], Bookmark>(
   'SELECT * FROM bookmarks WHERE user_id = ? AND server_updated_at > ? ORDER BY server_updated_at'
 );
+// Lightweight active-row counter for the popup's live "远程书签" display
+// (GET /sync/count). One indexed COUNT, no row payload.
+const countActive = db.prepare<[number], { c: number }>(
+  'SELECT COUNT(*) AS c FROM bookmarks WHERE user_id = ? AND deleted_at IS NULL'
+);
 const findById = db.prepare<[string, number], Bookmark>(
   'SELECT * FROM bookmarks WHERE id = ? AND user_id = ?'
 );
@@ -160,6 +165,19 @@ type Conflict = {
   reason: 'not_found' | 'already_deleted' | 'newer_exists';
   server_date_modified?: number;
 };
+
+// ─── GET /api/sync/count ──────────────────────────────────────────────
+// Live active-bookmark count. The popup fetches this on every open so its
+// "远程书签" number reflects the cloud NOW instead of the last sync-cycle
+// snapshot. Very cheap: single indexed COUNT, no sync-log row written.
+app.get('/count', (c) => {
+  const user = c.get('user' as never) as User;
+  const row = countActive.get(user.id);
+  return c.json({
+    ok: true,
+    data: { count: row?.c ?? 0, server_time: now() },
+  });
+});
 
 // ─── 8.3 GET /api/sync/pull?since=<ms> ────────────────────────────────
 app.get('/pull', (c) => {

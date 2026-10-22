@@ -453,25 +453,43 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
           } catch {
             localCount = size; // fallback to idMap count
           }
-          // Also fetch the username for displaying in the popup.
+          // Fetch username + a LIVE remote count in parallel. The old UI
+          // showed `SyncState.remote_count`, a snapshot written only when a
+          // sync cycle finishes (up to 5 min stale, and in syncCycle it was
+          // the local idMap size, not the cloud's real active count) — the
+          // "远程书签" number therefore lagged noticeably. On any failure we
+          // fall back to the stored snapshot.
           let username = null;
+          let remoteCount = state?.remote_count ?? null;
+          let remoteCountLive = false;
           try {
             const { apiUrl, token } = await getConfig();
             if (apiUrl && token) {
-              const r = await fetch(apiUrl + '/auth/me', {
+              const auth = fetch(apiUrl + '/auth/me', {
                 headers: { Authorization: 'Bearer ' + token },
-              });
-              if (r.ok) {
-                const j = await r.json();
-                username = (j.data && (j.data.username || j.data.email)) || (j.username || j.email) || null;
+                signal: AbortSignal.timeout(5000),
+              })
+                .then((r) => (r.ok ? r.json() : null))
+                .catch(() => null);
+              const cnt = fetch(apiUrl + '/sync/count', {
+                headers: { Authorization: 'Bearer ' + token },
+                signal: AbortSignal.timeout(5000),
+              })
+                .then((r) => (r.ok ? r.json() : null))
+                .catch(() => null);
+              const [meRes, cntRes] = await Promise.all([auth, cnt]);
+              if (meRes) {
+                username = (meRes.data && (meRes.data.username || meRes.data.email)) || (meRes.username || meRes.email) || null;
+              }
+              if (cntRes && cntRes.ok && cntRes.data && typeof cntRes.data.count === 'number') {
+                remoteCount = cntRes.data.count;
+                remoteCountLive = true;
               }
             }
           } catch (err) {
             console.warn('[background] GET_STATE fetch failed:', err && err.message || err);
           }
-          // remote_count is saved by syncCycle/initialMerge into SyncState on every sync
-          const remoteCount = state?.remote_count ?? null;
-                    sendResponse({ ok: true, state, idMapSize: localCount, username, remoteCount });
+          sendResponse({ ok: true, state, idMapSize: localCount, username, remoteCount, remoteCountLive });
           break;
         }
 

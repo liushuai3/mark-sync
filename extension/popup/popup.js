@@ -120,6 +120,12 @@ function renderState(payload) {
   const remoteLabel = document.getElementById('remoteCountLabel');
   if (remoteLabel) {
     remoteLabel.textContent = remoteCount != null ? String(remoteCount) : '-';
+    // Live count from GET /sync/count; falls back to the last sync-cycle
+    // snapshot when the realtime query failed (offline / bad token).
+    remoteLabel.title =
+      payload && payload.remoteCountLive
+        ? '云端实时计数'
+        : '云端计数（实时查询未成功，显示上次同步时的数值）';
   }
 
   // Show username if available
