@@ -96,10 +96,24 @@ export async function initialMerge({ apiUrl, token, remerge = false }) {
 
   globalThis.__marksyncSyncing = true;
 
+  // P0: rollback target for the catch below; captured inside the try.
+  let idMapSnapshot = null;
+
   try {
     if (!apiUrl || !token) {
       return { ok: false, error: 'apiUrl and token are required' };
     }
+
+    // P0 (push-failure rollback): snapshot before touching idMap. The old
+    // code checkpointed the freshly built bindings BEFORE the push round
+    // trip ("P1-8"), so a failed push (network / token / 401) left disk
+    // claiming bindings for cloud rows that were never created — later
+    // re-runs then minted duplicate ids and polluted the content-dedup
+    // index with dead cloud ids. We now persist only on success (Step 7)
+    // and restore the snapshot on any failure so the next attempt rebuilds
+    // the exact same merge from a clean slate.
+    await IdMapStore.all(); // force-load: snapshot() is null on a cold cache
+    idMapSnapshot = IdMapStore.snapshot();
 
     // Re-merge mode: the idMap may reference cloud ids that were purged
     // with their tombstones — rebuild the whole binding from this run.
@@ -386,9 +400,9 @@ export async function initialMerge({ apiUrl, token, remerge = false }) {
     // ── 5.5  Local dedup (cloud-only creates may have introduced duplicates) ──
     await deduplicateLocalTree({ tag: '[MarkSync/initialMerge]', remove: false });
 
-    // P1-8: checkpoint the freshly built idMap before the push round-trip —
-    // a service-worker kill during the push must not lose the bindings.
-    await IdMapStore.save();
+    // P0: NO idMap save here anymore. Persisting before the push meant a
+    // failed push left bindings on disk for cloud rows that don't exist;
+    // Step 7 saves only after a successful push.
 
     let backendDeduped = 0;
     if (pushAdded.length || modifiedFallback.length) {
@@ -460,6 +474,18 @@ export async function initialMerge({ apiUrl, token, remerge = false }) {
     };
   } catch (err) {
     console.error('[MarkSync/initialMerge] failed:', err);
+    // P0: roll back every idMap mutation this run made. In remerge mode
+    // IdMapStore.clear() already hit disk, so the restore must be
+    // persisted too; otherwise the snapshot only lives in memory and a
+    // worker kill would leave an empty map behind.
+    try {
+      if (idMapSnapshot) {
+        IdMapStore.restore(idMapSnapshot);
+        await IdMapStore.save();
+      }
+    } catch {
+      /* best-effort — next run re-merges anyway */
+    }
     try {
       await SyncState.update({ last_error: String(err && err.message || err) });
     } catch {

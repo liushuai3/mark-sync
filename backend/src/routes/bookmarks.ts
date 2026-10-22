@@ -191,19 +191,53 @@ app.put('/:id', async (c) => {
   return c.json({ ok: true, data: { updated: true } });
 });
 
+// ─── P1-A: cascading tombstones ───────────────────────────────────────
+// Deleting only a folder row leaves its descendants active with a dead
+// parent_id. Clients then fail to apply the folder tombstone ("cannot
+// remove non-empty folder"), wedge the pull checkpoint for 6 cycles, and a
+// forced re-merge re-homes every orphan to the bookmark-bar root — i.e.
+// the web delete resurrects the whole subtree in the wrong place. Every
+// web delete therefore tombstones the entire subtree, level by level.
+const selectActiveChildren = db.prepare<[number, string], { id: string }>(
+  'SELECT id FROM bookmarks WHERE user_id = ? AND parent_id = ? AND deleted_at IS NULL'
+);
+const tombstoneById = db.prepare(
+  'UPDATE bookmarks SET deleted_at = ?, server_updated_at = ?, date_modified = ?, version = version + 1 WHERE id = ? AND user_id = ? AND deleted_at IS NULL'
+);
+
+/**
+ * Tombstone `rootId` and all of its active descendants (breadth-first).
+ * Returns the number of rows tombstoned. Idempotent; safe to call inside
+ * an outer transaction.
+ */
+export function tombstoneSubtree(userId: number, rootId: string, ts: number): number {
+  let count = 0;
+  const queue: string[] = [rootId];
+  const seen = new Set<string>([rootId]); // cycle guard (parent_id loops)
+  while (queue.length > 0) {
+    const id = queue.shift()!;
+    const info = tombstoneById.run(ts, ts, ts, id, userId);
+    if (info.changes > 0) count++;
+    for (const child of selectActiveChildren.all(userId, id)) {
+      if (!seen.has(child.id)) {
+        seen.add(child.id);
+        queue.push(child.id);
+      }
+    }
+  }
+  return count;
+}
+
 app.delete('/:id', (c) => {
   const user = c.get('user' as never) as User;
   const id = c.req.param('id');
   const ts = now();
-  const info = db
-    .prepare(
-      'UPDATE bookmarks SET deleted_at = ?, server_updated_at = ?, date_modified = ?, version = version + 1 WHERE id = ? AND user_id = ? AND deleted_at IS NULL'
-    )
-    .run(ts, ts, ts, id, user.id);
-  if (info.changes === 0) {
+  // P1-A: cascade — tombstone the whole subtree, not just the row itself.
+  const count = db.transaction(() => tombstoneSubtree(user.id, id, ts))();
+  if (count === 0) {
     return c.json({ ok: false, error: 'Not found', code: 'NOT_FOUND' }, 404);
   }
-  return c.json({ ok: true, data: { deleted: true } });
+  return c.json({ ok: true, data: { deleted: true, cascaded: count } });
 });
 
 app.post('/batch-delete', async (c) => {
@@ -214,14 +248,11 @@ app.post('/batch-delete', async (c) => {
   }
   const { ids } = parsed.data;
   const ts = now();
-  const stmt = db.prepare(
-    'UPDATE bookmarks SET deleted_at = ?, server_updated_at = ?, date_modified = ?, version = version + 1 WHERE id = ? AND user_id = ? AND deleted_at IS NULL'
-  );
   let count = 0;
+  // P1-A: each id cascades to its subtree inside one transaction.
   const tx = db.transaction(() => {
     for (const id of ids) {
-      const info = stmt.run(ts, ts, ts, id, user.id);
-      if (info.changes > 0) count++;
+      count += tombstoneSubtree(user.id, id, ts);
     }
   });
   tx();

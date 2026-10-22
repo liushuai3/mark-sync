@@ -265,6 +265,33 @@ export async function clear() {
 }
 
 /**
+ * Capture a shallow copy of the current in-memory idMap (P0 rollback fix).
+ * `syncCycle` snapshots BEFORE the diff phase and restores it when the push
+ * round-trip fails — otherwise the diff's baseline rewrites would claim the
+ * local changes were already synced and they would NEVER be pushed again
+ * (silent divergence between this device and the cloud).
+ *
+ * Shallow copy is safe: every mutation path (`set`/`del`) replaces entry
+ * objects with new copies instead of mutating them in place.
+ * @returns {Object<string, object> | null}  null when nothing is loaded yet.
+ */
+export function snapshot() {
+  return cache === null ? null : { ...cache };
+}
+
+/**
+ * Restore a snapshot taken by snapshot() and rebuild the reverse index.
+ * No-op when the snapshot is null. Callers must re-issue save() themselves
+ * if the restored state should also hit disk.
+ * @param {Object<string, object> | null} snap
+ */
+export function restore(snap) {
+  if (!snap) return;
+  cache = { ...snap };
+  rebuildReverseIndex();
+}
+
+/**
  * @internal Test-only helper: drop the in-memory cache without touching
  *   storage, forcing the next call to reload from `chrome.storage.local`.
  *   Not part of the public API contract in SRS §5.1.1.
@@ -279,6 +306,8 @@ export function _resetForTest() {
 export default {
   load,
   save,
+  snapshot,
+  restore,
   getByCloudId,
   getByChromeId,
   set,

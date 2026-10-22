@@ -557,6 +557,53 @@ async function main() {
     );
     assert(typeof cnt.json.data.server_time === 'number', 'sync/count returns server_time');
 
+    section('bookmarks DELETE — cascading subtree tombstones (P1-A regression)');
+    // Seed a folder + child via force, then delete the FOLDER only from the
+    // web API. Old behavior tombstoned just the folder row; the child stayed
+    // active with a dead parent_id, which wedged every client's pull
+    // checkpoint and resurrected the child at the bookmark-bar root on the
+    // next re-merge. The delete must now cascade to the whole subtree.
+    const seedTree = await req('POST', '/api/sync/force', {
+      token: apiToken,
+      body: {
+        bookmarks: [
+          {
+            id: 'uuid-cas-f', type: 'folder', parent_id: null, root: 'bookmark_bar',
+            name: 'CascadeFolder', url: null, position: 0,
+            date_added: Date.now(), date_modified: Date.now(),
+          },
+          {
+            id: 'uuid-cas-c', type: 'url', parent_id: 'uuid-cas-f', root: 'bookmark_bar',
+            name: 'CascadeChild', url: 'https://example.com/cascade', position: 0,
+            date_added: Date.now(), date_modified: Date.now(),
+          },
+        ],
+      },
+    });
+    assert(seedTree.status === 200 && seedTree.json.ok, 'cascade seed: folder+child inserted');
+    const delFolder = await req('DELETE', '/api/bookmarks/uuid-cas-f', { token: jwt });
+    assert(
+      delFolder.status === 200 && delFolder.json.ok,
+      `cascade: DELETE folder → 200 (got ${delFolder.status})`
+    );
+    assert(
+      delFolder.json.data && delFolder.json.data.cascaded === 2,
+      `cascade: response reports 2 rows tombstoned (got ${delFolder.json.data && delFolder.json.data.cascaded})`
+    );
+    const pullCascade = await req('GET', '/api/sync/pull', { token: apiToken });
+    const casFolder = pullCascade.json.data.bookmarks.find((b) => b.id === 'uuid-cas-f');
+    const casChild = pullCascade.json.data.bookmarks.find((b) => b.id === 'uuid-cas-c');
+    assert(
+      !!casFolder && casFolder.deleted_at != null,
+      'cascade: folder row is tombstoned'
+    );
+    assert(
+      !!casChild && casChild.deleted_at != null,
+      `cascade: CHILD row is tombstoned too (deleted_at=${casChild && casChild.deleted_at})`
+    );
+    const delAgain = await req('DELETE', '/api/bookmarks/uuid-cas-f', { token: jwt });
+    assert(delAgain.status === 404, 'cascade: deleting an already-deleted folder → 404 (idempotent)');
+
     section('Token revocation');
     const revoke = await req('DELETE', `/api/tokens/${tokenId}`, { token: jwt });
     assert(revoke.json.ok, 'revoke token');

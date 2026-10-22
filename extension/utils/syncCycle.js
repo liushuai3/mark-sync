@@ -152,12 +152,22 @@ export async function syncCycle({ apiUrl, token, manual = false }) {
     await deduplicateLocalTree({ tag, remove: false });
 
     // ── 3. Build local diff (two-pass: assign cloud ids, then diff) ──
+    //
+    // P0 (push-failure rollback): snapshot the idMap as it stands AFTER the
+    // apply phase, and do NOT persist the diff's baseline rewrites until the
+    // push has succeeded. The old code saved to disk here ("P1-8 pre-push
+    // checkpoint"), so ANY push failure — token expiry (401), network drop,
+    // 5xx exhaustion, SW kill — left on-disk baselines claiming the local
+    // changes were already synced; every later cycle saw "no changes" and
+    // the edits were silently lost forever (divergence with the cloud that
+    // no pull could repair, since the server still owns the stale values).
+    // On failure we restore the in-memory snapshot and rethrow; the next
+    // cycle re-derives and re-pushes the identical diff. Re-minted cloud ids
+    // after a rollback are harmless: the server's content-dedup remaps them
+    // (and modified/removed pushes are idempotent server-side).
+    await IdMapStore.all(); // force-load first: snapshot() is null on a cold cache
+    const idMapSnapshot = IdMapStore.snapshot();
     const { added, modified, removed } = await buildLocalDiff(serverTime);
-
-    // P1-8: checkpoint before the network push — the diff phase may have
-    // minted and staged dozens of new cloud ids; persisting them here
-    // means a kill during the push cannot cause id re-minting.
-    await IdMapStore.save();
 
     // ── 4. Push local diff ───────────────────────────────────────────
     let conflicts = [];
@@ -167,51 +177,59 @@ export async function syncCycle({ apiUrl, token, manual = false }) {
       console.log(
         `${tag} step4: POST /sync/push added=${added.length} modified=${modified.length} removed=${removed.length}`
       );
-      // P1-4: batched push — client-side chunking keeps every request far
-      // under the server's 10MB body cap, and a 413 response is retried
-      // with a binary split so one oversized payload can never wedge sync.
-      const pushRes = await pushInBatches(apiUrl, token, { added, modified, removed });
-      conflicts = Array.isArray(pushRes?.conflicts) ? pushRes.conflicts : [];
-      pushCounts = {
-        added_count: Number(pushRes?.added_count) || 0,
-        modified_count: Number(pushRes?.modified_count) || 0,
-        removed_count: Number(pushRes?.removed_count) || 0,
-      };
+      try {
+        // P1-4: batched push — client-side chunking keeps every request far
+        // under the server's 10MB body cap, and a 413 response is retried
+        // with a binary split so one oversized payload can never wedge sync.
+        const pushRes = await pushInBatches(apiUrl, token, { added, modified, removed });
+        conflicts = Array.isArray(pushRes?.conflicts) ? pushRes.conflicts : [];
+        pushCounts = {
+          added_count: Number(pushRes?.added_count) || 0,
+          modified_count: Number(pushRes?.modified_count) || 0,
+          removed_count: Number(pushRes?.removed_count) || 0,
+        };
 
-      // Handle backend deduplication: the server may have merged some of our
-      // `added` entries into existing cloud bookmarks. Update idMap so the
-      // next cycle doesn't push the same duplicates again.
-      const serverDeduped = Array.isArray(pushRes?.deduped) ? pushRes.deduped : [];
-      if (serverDeduped.length > 0) {
-        // Build a reverse lookup: requested_id -> original added entry
-        const addedMap = new Map(added.map((a) => [a.id, a]));
-        for (const d of serverDeduped) {
-          const originalAdd = addedMap.get(d.requested_id);
-          if (!originalAdd) continue;
-          // Find the local chrome_id associated with this requested_id.
-          // Walk staged to find the node that was assigned this cloud_id.
-          // Since staged is local to buildLocalDiff, we track it differently.
-          // Instead: iterate idMap entries to find one with cloud_id == d.requested_id.
-          const tempEntry = await IdMapStore.getByCloudId(d.requested_id);
-          if (tempEntry && tempEntry.chrome_id) {
-            await IdMapStore.delete(d.requested_id);
-            await IdMapStore.set(d.existing_id, {
-              chrome_id: tempEntry.chrome_id,
-              parent_cloud_id: originalAdd.parent_id || null,
-              name: originalAdd.name,
-              url: originalAdd.url,
-              type: originalAdd.type,
-              root: originalAdd.root,
-              position: originalAdd.position,
-              date_modified: originalAdd.date_modified || 0,
-              synced_at: Date.now(),
-            });
-            backendDeduped++;
+        // Handle backend deduplication: the server may have merged some of our
+        // `added` entries into existing cloud bookmarks. Update idMap so the
+        // next cycle doesn't push the same duplicates again.
+        const serverDeduped = Array.isArray(pushRes?.deduped) ? pushRes.deduped : [];
+        if (serverDeduped.length > 0) {
+          // Build a reverse lookup: requested_id -> original added entry
+          const addedMap = new Map(added.map((a) => [a.id, a]));
+          for (const d of serverDeduped) {
+            const originalAdd = addedMap.get(d.requested_id);
+            if (!originalAdd) continue;
+            // Find the local chrome_id associated with this requested_id.
+            // Walk staged to find the node that was assigned this cloud_id.
+            // Since staged is local to buildLocalDiff, we track it differently.
+            // Instead: iterate idMap entries to find one with cloud_id == d.requested_id.
+            const tempEntry = await IdMapStore.getByCloudId(d.requested_id);
+            if (tempEntry && tempEntry.chrome_id) {
+              await IdMapStore.delete(d.requested_id);
+              await IdMapStore.set(d.existing_id, {
+                chrome_id: tempEntry.chrome_id,
+                parent_cloud_id: originalAdd.parent_id || null,
+                name: originalAdd.name,
+                url: originalAdd.url,
+                type: originalAdd.type,
+                root: originalAdd.root,
+                position: originalAdd.position,
+                date_modified: originalAdd.date_modified || 0,
+                synced_at: Date.now(),
+              });
+              backendDeduped++;
+            }
           }
+          if (backendDeduped > 0) {
+            console.log(`${tag} backend deduped ${backendDeduped} duplicates`);
         }
-        if (backendDeduped > 0) {
-          console.log(`${tag} backend deduped ${backendDeduped} duplicates`);
-        }
+      }
+      } catch (err) {
+        // P0: undo every baseline the diff phase wrote (in memory only —
+        // nothing was saved to disk since the snapshot). The next cycle
+        // re-derives this exact diff and retries the push.
+        IdMapStore.restore(idMapSnapshot);
+        throw err;
       }
     } else {
       console.log(`${tag} step4: nothing to push`);
@@ -529,27 +547,51 @@ async function buildLocalDiff(now) {
   // derived from parent_cloud_id chain (approximate — may differ from
   // flattenLocalTree's DFS path, but good enough for dedup).
   const allEntries = await IdMapStore.all();
-  /** @type {Map<string, string>} dedupe_key -> cloud_id */
-  const dedupeToCloudId = new Map();
-  // P2: build a cloud_id → name index once. The old code ran
-  // `allEntries.find(...)` per entry — O(n²), i.e. ~10⁸ comparisons for a
-  // 10k-bookmark library, which alone blew the SRS 3s budget and made
-  // every cycle long enough to risk the MV3 idle kill.
-  const nameByCloudId = new Map();
+  /** @type {Map<string, string[]>} dedupe_key -> candidate cloud_ids */
+  const dedupeToCloudIds = new Map();
+  /** @type {Map<string, object>} cloud_id -> entry (for path walking) */
+  const entryByCloudId = new Map();
   for (const x of allEntries) {
-    if (x && x.cloud_id) nameByCloudId.set(x.cloud_id, x.name || '');
+    if (x && x.cloud_id) entryByCloudId.set(x.cloud_id, x);
   }
+  // P1-B: index idMap entries by (root, FULL parent path, name, url).
+  // The old index used only the immediate parent's NAME, so (a) keys for
+  // depth≥2 entries never matched the local `parent_path` (which is the
+  // full chain), and (b) two same-named folders in different locations
+  // produced identical keys — a locally-new bookmark could bind to, and
+  // then push a move of, the cloud row of a completely different folder.
+  // Keys are now full-path; callers additionally verify the parent id.
+  const parentPathByCloudId = new Map();
+  const pathAbove = (e, depth) => {
+    if (parentPathByCloudId.has(e.cloud_id)) return parentPathByCloudId.get(e.cloud_id);
+    let result;
+    if (!e.parent_cloud_id) {
+      result = '';
+    } else if (depth > 64) {
+      result = null; // cycle in parent chain — path unreliable
+    } else {
+      const p = entryByCloudId.get(e.parent_cloud_id);
+      if (!p) {
+        result = null; // dangling parent (e.g. mid-repair) — leave to server dedup
+      } else {
+        const pp = pathAbove(p, depth + 1);
+        result = pp === null ? null : pp ? `${pp}/${p.name || ''}` : (p.name || '');
+      }
+    }
+    parentPathByCloudId.set(e.cloud_id, result);
+    return result;
+  };
   for (const e of allEntries) {
     if (!e || !e.cloud_id) continue;
-    const parentPath = e.parent_cloud_id
-      ? nameByCloudId.get(e.parent_cloud_id) || ''
-      : '';
+    const parentPath = pathAbove(e, 0);
+    if (parentPath === null) continue; // unresolvable — do not index
     const key = `${e.root || ''}\u0000${parentPath}\u0000${e.name || ''}\u0000${e.url || ''}`;
-    if (!dedupeToCloudId.has(key)) {
-      dedupeToCloudId.set(key, e.cloud_id);
+    if (!dedupeToCloudIds.has(key)) {
+      dedupeToCloudIds.set(key, []);
     }
+    dedupeToCloudIds.get(key).push(e.cloud_id);
   }
-  console.log(`[MarkSync/syncCycle] buildDiff: dedupe index has ${dedupeToCloudId.size} unique keys from ${allEntries.length} idMap entries`);
+  console.log(`[MarkSync/syncCycle] buildDiff: dedupe index has ${dedupeToCloudIds.size} unique keys from ${allEntries.length} idMap entries`);
 
   // Pass 1: assign cloud ids to locally-new nodes so pass 2 can resolve
   // parent_id references (parents may themselves be brand-new).
@@ -571,7 +613,26 @@ async function buildLocalDiff(now) {
     } else {
       // Check local dedup: does idMap already have an entry with same content?
       const dk = `${l.root}\u0000${l.parent_path}\u0000${l.name}\u0000${l.url || ''}`;
-      const existingCloudId = dedupeToCloudId.get(dk);
+      // P1-B: a full-path key alone still collides when two same-named
+      // folders live at different locations (both children read parent_path
+      // "工作"). Only reuse a candidate whose parent_cloud_id IS the cloud
+      // id this node's own parent resolved to above (pre-order DFS
+      // guarantees the parent was staged first). A cross-folder mismatch
+      // must mint a fresh id — binding anyway made the next diff push a
+      // move, hijacking an unrelated cloud row into this folder (and the
+      // corrupted baseline never converged).
+      const parentCloudId = l.parent_chrome_id
+        ? chromeToCloudId.get(String(l.parent_chrome_id)) || null
+        : null;
+      const candidates = dedupeToCloudIds.get(dk) || [];
+      let existingCloudId = null;
+      for (const cid of candidates) {
+        const cand = entryByCloudId.get(cid);
+        if (cand && (cand.parent_cloud_id || null) === parentCloudId) {
+          existingCloudId = cid;
+          break;
+        }
+      }
       if (existingCloudId) {
         // Reuse existing cloud_id — this bookmark was already synced by
         // another browser or a prior initialMerge.
