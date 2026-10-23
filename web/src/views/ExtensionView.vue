@@ -1,20 +1,32 @@
 <template>
   <n-space vertical size="large">
-    <n-card title="下载浏览器插件" :bordered="false">
+    <n-card title="安装浏览器插件" :bordered="false">
       <n-alert type="success" :show-icon="false" style="margin-bottom: 16px">
         <strong>MarkSync 浏览器插件 v{{ extMeta.version }}</strong> — 支持 Chrome / Edge / Firefox
       </n-alert>
       <n-space>
-        <n-button type="primary" size="large" tag="a" :href="extDownloadUrl" download>
+        <n-button type="primary" size="large" tag="a" :href="storeUrls.chrome" target="_blank">
+          Chrome 应用商店安装
+        </n-button>
+        <n-button type="primary" size="large" tag="a" :href="storeUrls.edge" target="_blank">
+          Edge 加载项安装
+        </n-button>
+        <n-button size="large" tag="a" :href="extDownloadUrl" download>
           <template #icon><n-icon><DownloadOutline /></n-icon></template>
-          下载插件 v{{ extMeta.version }} (.zip)
+          下载 zip v{{ extMeta.version }}（开发者安装 / Firefox）
         </n-button>
       </n-space>
     </n-card>
 
     <n-card title="安装指南" :bordered="false">
       <n-steps :current="-1">
-        <n-step title="下载并解压">
+        <n-step title="安装（商店方式，推荐）">
+          <template #description>
+            <p>Chrome / Edge 用户点击上方商店按钮，进入商店页点击 <strong>「添加至 Chrome / Get」</strong> 即可，浏览器自动安装并同步更新。</p>
+            <p>装好后直接跳到第 4 步配置即可，无需下面的开发者步骤。</p>
+          </template>
+        </n-step>
+        <n-step title="下载并解压（开发者 / Firefox 方式）">
           <template #description>
             点击上方按钮下载 <code>marksync-extension-v{{ extMeta.version }}.zip</code>，解压到任意目录。
           </template>
@@ -90,6 +102,12 @@ const message = useMessage();
 const extMeta = EXTENSION_META;
 const apiUrl = computed(() => `${window.location.origin}/api`);
 const extDownloadUrl = `/downloads/marksync-extension-v${EXTENSION_META.version}.zip`;
+const storeUrls = {
+  chrome:
+    'https://chromewebstore.google.com/detail/marksync-%E4%B9%A6%E7%AD%BE%E5%90%8C%E6%AD%A5/lmleaekggnegoeemedmkdmgegjjdpibo',
+  edge:
+    'https://microsoftedge.microsoft.com/addons/detail/marksync-%E4%B9%A6%E7%AD%BE%E5%90%8C%E6%AD%A5/kgfedigcggagbdlfokgdeojaahknnfie',
+};
 
 function openUrl(url) {
   window.open(url, '_blank');
