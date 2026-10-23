@@ -167,7 +167,20 @@ export async function syncCycle({ apiUrl, token, manual = false }) {
     // (and modified/removed pushes are idempotent server-side).
     await IdMapStore.all(); // force-load first: snapshot() is null on a cold cache
     const idMapSnapshot = IdMapStore.snapshot();
-    const { added, modified, removed } = await buildLocalDiff(serverTime);
+    // buildLocalDiff must sit INSIDE the rollback scope: it fetches the
+    // bookmark tree (chrome API can throw) while already writing idMap
+    // baselines. An uncaught throw there would poison the in-memory cache
+    // — and the NEXT cycle's apply-checkpoint (step 2 save) would persist
+    // it, making the "baseline == local → never push" loss permanent.
+    let added = [];
+    let modified = [];
+    let removed = [];
+    try {
+      ({ added, modified, removed } = await buildLocalDiff(serverTime));
+    } catch (err) {
+      IdMapStore.restore(idMapSnapshot);
+      throw err;
+    }
 
     // ── 4. Push local diff ───────────────────────────────────────────
     let conflicts = [];
