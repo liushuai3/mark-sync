@@ -1,0 +1,25 @@
+#!/bin/bash
+# MarkSync fnOS 生命周期脚本
+# Docker 应用的启动/停止由 fnOS 的 docker-project 资源托管，
+# 这里只需准确返回运行状态。
+
+CONTAINER_NAME="marksync"
+
+case "$1" in
+  start)
+    exit 0
+    ;;
+  stop)
+    exit 0
+    ;;
+  status)
+    if docker inspect "$CONTAINER_NAME" 2>/dev/null | grep -q '"Status": "running"'; then
+      exit 0
+    fi
+    exit 3
+    ;;
+  *)
+    echo "Unknown command: $1" > "$TRIM_TEMP_LOGFILE"
+    exit 1
+    ;;
+esac

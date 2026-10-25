@@ -1,0 +1,31 @@
+services:
+  marksync:
+    # 镜像 tag 与 manifest 版本严格对齐（不一致会报 manifest unknown）
+    image: zcoolq/marksync:4.0.0
+    container_name: marksync
+    restart: unless-stopped
+    ports:
+      - "${TRIM_SERVICE_PORT}:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - TZ=Asia/Shanghai
+      - DB_PATH=/app/backend/data/bookmarks.db
+      - JWT_EXPIRES_IN=7d
+      - REGISTRATION_OPEN=true
+      - LOG_LEVEL=info
+      - ADMIN_USERNAME=${wizard_admin_user:-}
+      - ADMIN_PASSWORD=${wizard_admin_password:-}
+    volumes:
+      - "${TRIM_PKGVAR}/data:/app/backend/data"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e 'fetch(`http://localhost:3000/health`).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))'"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

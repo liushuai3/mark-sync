@@ -1,0 +1,3 @@
+#!/bin/bash
+# Docker 应用：fnOS 托管 compose 生命周期，无额外动作。
+exit 0

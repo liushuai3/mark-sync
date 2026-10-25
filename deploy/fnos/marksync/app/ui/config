@@ -1,0 +1,13 @@
+{
+  ".url": {
+    "marksync.main": {
+      "title": "MarkSync 书签同步",
+      "icon": "images/icon_{0}.png",
+      "type": "iframe",
+      "protocol": "http",
+      "port": "8888",
+      "url": "/",
+      "allUsers": true
+    }
+  }
+}

@@ -1,0 +1,34 @@
+[
+  {
+    "stepTitle": "初始化管理员账号",
+    "items": [
+      {
+        "type": "tips",
+        "helpText": "首次启动时将用这两个值创建管理员账号，之后可在登录页使用。也可留空，启动后通过开放注册注册首个账号。"
+      },
+      {
+        "type": "text",
+        "field": "wizard_admin_user",
+        "label": "管理员用户名",
+        "initValue": "admin",
+        "rules": [
+          {
+            "required": false,
+            "message": "请输入用户名"
+          }
+        ]
+      },
+      {
+        "type": "password",
+        "field": "wizard_admin_password",
+        "label": "管理员密码",
+        "rules": [
+          {
+            "required": false,
+            "message": "请输入密码"
+          }
+        ]
+      }
+    ]
+  }
+]

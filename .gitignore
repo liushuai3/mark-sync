@@ -12,3 +12,6 @@ data/
 jwt.secret
 backups/
 .vite/
+
+# fnOS 打包产物
+*.fpk
