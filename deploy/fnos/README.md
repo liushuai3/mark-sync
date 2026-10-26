@@ -31,6 +31,8 @@ fnpack build          # 产出 marksync.fpk
 
 - `manifest` 的 `version` 与 Docker Hub 镜像 tag **严格一致**（当前 4.0.0），
   不一致时报误导性 `manifest unknown`
+- 同版本 fpk 应用中心拒绝覆盖安装——迭代验证用修订号 `x.y.z-<整数>`（如
+  `4.0.0-2`，fnpack 强制格式），镜像 tag 仍用原版（compose 引用存在即可）
 - 发版流程：①改 manifest version=4.0.1 ②构建镜像 `docker build -t zcoolq/marksync:4.0.1 .`
   并推送 ③`fnpack build` ④提交应用中心
 

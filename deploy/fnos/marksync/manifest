@@ -1,5 +1,5 @@
 appname=marksync
-version=4.0.0
+version=4.0.0-2
 display_name=MarkSync 书签同步
 desc=自托管浏览器书签多端双向同步服务。支持 Chrome / Edge / Firefox 扩展，增量同步、删除墓碑、字段级冲突合并；数据存本地 SQLite，配 Web 管理后台与 REST API。
 source=thirdparty
@@ -16,6 +16,5 @@ desktop_applaunchname=marksync.main
 service_port=8888
 checkport=true
 ctl_stop=true
-disable_authorization_path=true
 
-changelog=首个应用中心版本（v4.0.0）。包含可靠双向增量同步引擎、Chrome/Edge 商店版扩展、Web 管理后台、API Token 与多用户支持。
+changelog=开发者/发布者信息修正为 liushuai3 + GitHub 仓库地址；修订号 -2 便于覆盖升级。
