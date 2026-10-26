@@ -5,8 +5,10 @@ desc=自托管浏览器书签多端双向同步服务。支持 Chrome / Edge / F
 source=thirdparty
 platform=x86
 
-maintainer=zcoolq
-maintainer_url=https://marksync.zcoolq.cn
+maintainer=liushuai3
+maintainer_url=https://github.com/liushuai3/mark-sync
+distributor=liushuai3
+distributor_url=https://github.com/liushuai3/mark-sync
 
 desktop_uidir=ui
 desktop_applaunchname=marksync.main
