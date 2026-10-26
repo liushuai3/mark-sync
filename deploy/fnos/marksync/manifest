@@ -16,5 +16,6 @@ desktop_applaunchname=marksync.main
 service_port=8888
 checkport=true
 ctl_stop=true
+disable_authorization_path=true
 
 changelog=首个应用中心版本（v4.0.0）。包含可靠双向增量同步引擎、Chrome/Edge 商店版扩展、Web 管理后台、API Token 与多用户支持。
