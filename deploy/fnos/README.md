@@ -61,10 +61,18 @@ fnpack build          # 产出 marksync.fpk
 > 2. 登录 Web 管理台 → Token 管理 → 创建 API Token
 > 3. 各浏览器安装 MarkSync 扩展，填入 NAS 地址与 Token，即刻同步
 >
+> **界面预览**（`<img>` 托管于 https://marksync.zcoolq.cn/downloads/screenshots/ ）
+> - Web 管理台 · 仪表盘 / 扩展下载页（3-dashboard.png、4-extension-page.png）
+> - 浏览器扩展 · 同步状态弹窗 / 设置页（5-extension-popup.png、6-extension-options.png）
+>
 > 开源免费，源码与文档见 GitHub / Gitee 仓库。
 
 > 注：manifest 的 `desc` 字段为单行 HTML（官方支持），应用中心详情页经
-> filterXSS 过滤后按 HTML 渲染（`<p>/<b>/<h3>/<ul>/<ol>/<li>` 均在默认白名单）。
+> filterXSS 过滤后按 HTML 渲染（`<p>/<b>/<h3>/<ul>/<ol>/<li>/<img>` 均在默认白名单，
+> img 支持 `src/alt/title/width/height/loading` 属性）。
+> 图片必须是公网可访问的 https 绝对 URL——Gitee raw 有防盗链（外域 Referer 403），
+> 故自托管在本项目站点 `/downloads/screenshots/`（后端静态服务，源文件在
+> `web/public/downloads/screenshots/`，随镜像构建进 dist）。
 > 修改文案后需 `fnpack build` 重新打包并递增修订号。
 
 ### 安装说明（给审核/用户）
