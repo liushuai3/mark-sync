@@ -95,13 +95,17 @@ app.onError(errorHandler);
 const WEB_DIST = '../web/dist';
 if (isProd && existsSync(WEB_DIST)) {
   logger.info(`Serving static files from ${WEB_DIST}`);
-  // /downloads/* must be served before the catch-all, otherwise
-  // missing zip files fall through to index.html (SPA fallback).
+  // /downloads/* must be served before the catch-all so existing files
+  // resolve directly. serveStatic calls next() when the file is missing,
+  // so without the 404 handler below those requests would fall through to
+  // the SPA catch-all and render index.html (the login page) — disguising
+  // broken asset URLs as a "login wall". Static assets must fail loudly.
   app.use('/downloads/*', async (c, next) => {
     await next();
     c.res.headers.set('Cache-Control', 'no-store');
   });
   app.use('/downloads/*', serveStatic({ root: WEB_DIST }));
+  app.use('/downloads/*', async (c) => c.text('Not Found', 404));
   app.use('/*', serveStatic({ root: WEB_DIST }));
   app.get('*', serveStatic({ path: `${WEB_DIST}/index.html` }));
 }
