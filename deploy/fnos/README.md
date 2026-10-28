@@ -61,19 +61,22 @@ fnpack build          # 产出 marksync.fpk
 > 2. 登录 Web 管理台 → Token 管理 → 创建 API Token
 > 3. 各浏览器安装 MarkSync 扩展，填入 NAS 地址与 Token，即刻同步
 >
-> **界面预览**（`<img>` 托管于 https://marksync.zcoolq.cn/downloads/screenshots/ ）
-> - Web 管理台 · 仪表盘 / 扩展下载页（3-dashboard.png、4-extension-page.png）
-> - 浏览器扩展 · 同步状态弹窗 / 设置页（5-extension-popup.png、6-extension-options.png）
+> **界面预览**（`<img>` 托管于 Cloudflare Pages：https://img.zcoolq.cn/ ）
+> - Web 管理台 · 仪表盘 / 扩展下载页（dashboard.png、extension-page.png）
+> - 浏览器扩展 · 同步状态弹窗 / 设置页（popup.png、options.png）
 >
 > 开源免费，源码与文档见 GitHub / Gitee 仓库。
 
 > 注：manifest 的 `desc` 字段为单行 HTML（官方支持），应用中心详情页经
 > filterXSS 过滤后按 HTML 渲染（`<p>/<b>/<h3>/<ul>/<ol>/<li>/<img>` 均在默认白名单，
 > img 支持 `src/alt/title/width/height/loading` 属性）。
-> 图片必须是公网可访问的 https 绝对 URL——Gitee raw 有防盗链（外域 Referer 403），
-> 故自托管在本项目站点 `/downloads/screenshots/`（后端静态服务，源文件在
-> `web/public/downloads/screenshots/`，随镜像构建进 dist）。
-> 修改文案后需 `fnpack build` 重新打包并递增修订号。
+> 图片必须是公网可访问的 https 绝对 URL。托管演进史（2026-10-28 定稿）：
+> ① Gitee raw——外域 Referer 403 防盗链，不可用 ② 项目站点自托管——与应用
+> 实例/镜像耦合（旧镜像缺文件时 SPA 回落 index.html 伪装成登录页，已另修
+> 404）③ **现方案 Cloudflare Pages `img.zcoolq.cn`**——与 NAS/应用彻底解耦，
+> 源文件在 `deploy/fnos/store-images/`，部署 `CLOUDFLARE_API_TOKEN=...
+> CLOUDFLARE_ACCOUNT_ID=3b17ca3d537ec21b8f2eb31962a36614 ./deploy-store-images.sh`。
+> 修改文案/图片后需 `fnpack build` 重新打包并递增修订号。
 
 ### 安装说明（给审核/用户）
 
