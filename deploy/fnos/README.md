@@ -50,7 +50,7 @@ fnpack build          # 产出 marksync.fpk
 >
 > **核心能力**
 > - **双向增量同步**：每台设备独立 UUID，只传输变更内容；默认每 5 分钟自动同步 + 书签变更实时监听
-> - **可靠不丢数据**：删除墓碑传播到所有设备、字段级 LWW 冲突自动合并、推送失败自动回滚基线、分批推送与断网退避重试
+> - **可靠不丢数据**：删除的书签自动同步到所有设备、字段级 LWW 冲突自动合并、推送失败自动回滚基线、分批推送与断网退避重试
 > - **自动去重**：重复书签自动收敛，扩展内也可手动一键清理
 > - **多用户与安全**：JWT 登录、API Token 管理、多账号数据隔离
 > - **Web 管理台开箱即用**：仪表盘、书签管理、扩展下载、同步日志、备份恢复，并提供完整 REST API
@@ -61,16 +61,22 @@ fnpack build          # 产出 marksync.fpk
 > 2. 登录 Web 管理台 → Token 管理 → 创建 API Token
 > 3. 各浏览器安装 MarkSync 扩展，填入 NAS 地址与 Token，即刻同步
 >
-> **界面预览**（`<img>` 托管于 Cloudflare Pages：https://img.zcoolq.cn/ ）
-> - Web 管理台 · 仪表盘 / 扩展下载页（dashboard.png、extension-page.png）
-> - 浏览器扩展 · 同步状态弹窗 / 设置页（popup.png、options.png）
+> **界面预览**（图源托管于 Cloudflare Pages：https://img.zcoolq.cn/ ，分两组自动左右轮播）
+> - 管理端 · Web 管理台：仪表盘 / 扩展下载页（`admin-carousel.gif`，desc 内 width=100%）
+> - 插件端 · 浏览器扩展：同步状态弹窗 / 设置页（`ext-carousel.gif`，desc 内 width=360）
+> - 交互图库 `gallery.html`：desc 内文末链接跳转，两组轮播可手动左右切换 / 键盘 ←→ / 触摸滑动
 >
 > 开源免费，源码与文档见 GitHub / Gitee 仓库。
 
 > 注：manifest 的 `desc` 字段为单行 HTML（官方支持），应用中心详情页经
-> filterXSS 过滤后按 HTML 渲染（`<p>/<b>/<h3>/<ul>/<ol>/<li>/<img>` 均在默认白名单，
-> img 支持 `src/alt/title/width/height/loading` 属性）。
-> 图片必须是公网可访问的 https 绝对 URL。托管演进史（2026-10-28 定稿）：
+> filterXSS 过滤后按 HTML 渲染（`<p>/<b>/<h3>/<ul>/<ol>/<li>/<img>/<details>/<summary>/<a>`
+> 在白名单，img 支持 `src/alt/title/width/height/loading`，a 支持 `href/target/title`）。
+> **`<style>`、`style=` 属性、`<input>` 均被过滤**——desc 内做纯 HTML/CSS 交互轮播不可行
+> （2026-10-28 用应用中心前端 filterXSS 实现逐项验证）。现方案：**GIF 自动轮播**
+> （`admin-carousel.gif` / `ext-carousel.gif`，ffmpeg xfade=slideleft 生成，desc 内 `<img>`
+> 直接播放）+ **外链交互图库 `gallery.html`**（原生 JS，支持左右切换/键盘/触摸，经
+> `<a target="_blank">` 跳转）。图片必须是公网可访问的 https 绝对 URL。
+> 托管演进史（2026-10-28 定稿）：
 > ① Gitee raw——外域 Referer 403 防盗链，不可用 ② 项目站点自托管——与应用
 > 实例/镜像耦合（旧镜像缺文件时 SPA 回落 index.html 伪装成登录页，已另修
 > 404）③ **现方案 Cloudflare Pages `img.zcoolq.cn`**——与 NAS/应用彻底解耦，

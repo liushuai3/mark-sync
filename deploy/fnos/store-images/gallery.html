@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MarkSync · 界面图库</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8f9fc; color: #1d1d1f; margin: 0; padding: 24px 16px 48px; }
+    .wrap { max-width: 980px; margin: 0 auto; }
+    h1 { font-size: 22px; text-align: center; margin: 8px 0 4px; }
+    .sub { text-align: center; color: #5f6368; font-size: 13px; margin: 0 0 28px; }
+    section { margin-bottom: 40px; scroll-margin-top: 16px; }
+    h2 { font-size: 16px; margin: 0 0 12px; padding-left: 10px; border-left: 4px solid #3370ff; }
+    .carousel { position: relative; background: #fff; border: 1px solid #e5e7ee; border-radius: 12px; padding: 14px; }
+    .stage { position: relative; overflow: hidden; border-radius: 8px; background: #f1f3f7; }
+    .track { display: flex; transition: transform .35s ease; }
+    .slide { min-width: 100%; display: flex; align-items: center; justify-content: center; padding: 8px; }
+    .slide img { max-width: 100%; max-height: 540px; display: block; border-radius: 6px; box-shadow: 0 2px 12px rgba(0,0,0,.08); user-select: none; -webkit-user-drag: none; }
+    .btn { position: absolute; top: 50%; transform: translateY(-50%); width: 38px; height: 38px; border: none; border-radius: 50%; background: rgba(29,29,31,.55); color: #fff; font-size: 18px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background .2s; z-index: 2; }
+    .btn:hover { background: rgba(29,29,31,.8); }
+    .btn.prev { left: 22px; }
+    .btn.next { right: 22px; }
+    .dots { display: flex; justify-content: center; gap: 8px; margin-top: 12px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; border: none; background: #c9cdd6; cursor: pointer; padding: 0; transition: all .2s; }
+    .dot.active { background: #3370ff; width: 20px; border-radius: 4px; }
+    .caption { text-align: center; font-size: 13px; color: #5f6368; margin-top: 10px; min-height: 18px; }
+    .back { display: block; text-align: center; margin-top: 8px; font-size: 13px; color: #3370ff; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>MarkSync · 界面图库</h1>
+    <p class="sub">左右切换查看 · 键盘 ←/→ 也可翻页 · 来自 fnOS 应用中心介绍页</p>
+
+    <section id="admin">
+      <h2>管理端 · Web 管理台</h2>
+      <div class="carousel" data-carousel>
+        <div class="stage">
+          <div class="track">
+            <div class="slide"><img src="./dashboard.png" alt="Web 管理台 · 仪表盘" loading="lazy"></div>
+            <div class="slide"><img src="./extension-page.png" alt="Web 管理台 · 扩展下载页" loading="lazy"></div>
+          </div>
+        </div>
+        <button class="btn prev" aria-label="上一张">‹</button>
+        <button class="btn next" aria-label="下一张">›</button>
+        <div class="dots"></div>
+        <div class="caption"></div>
+      </div>
+    </section>
+
+    <section id="ext">
+      <h2>插件端 · 浏览器扩展</h2>
+      <div class="carousel" data-carousel>
+        <div class="stage">
+          <div class="track">
+            <div class="slide"><img src="./popup.png" alt="浏览器扩展 · 同步状态弹窗" loading="lazy"></div>
+            <div class="slide"><img src="./options.png" alt="浏览器扩展 · 设置页" loading="lazy"></div>
+          </div>
+        </div>
+        <button class="btn prev" aria-label="上一张">‹</button>
+        <button class="btn next" aria-label="下一张">›</button>
+        <div class="dots"></div>
+        <div class="caption"></div>
+      </div>
+    </section>
+
+    <a class="back" href="./">← 返回图片资源列表</a>
+  </div>
+
+  <script>
+    document.querySelectorAll('[data-carousel]').forEach(function (c) {
+      var track = c.querySelector('.track');
+      var slides = c.querySelectorAll('.slide');
+      var dotsBox = c.querySelector('.dots');
+      var caption = c.querySelector('.caption');
+      var i = 0;
+
+      slides.forEach(function (s, idx) {
+        var d = document.createElement('button');
+        d.className = 'dot';
+        d.setAttribute('aria-label', '第' + (idx + 1) + '张');
+        d.addEventListener('click', function () { go(idx); });
+        dotsBox.appendChild(d);
+      });
+
+      function go(n) {
+        i = (n + slides.length) % slides.length;
+        track.style.transform = 'translateX(' + (-i * 100) + '%)';
+        dotsBox.querySelectorAll('.dot').forEach(function (d, idx) { d.classList.toggle('active', idx === i); });
+        var img = slides[i].querySelector('img');
+        caption.textContent = img.alt + '（' + (i + 1) + '/' + slides.length + '）';
+      }
+
+      c.querySelector('.prev').addEventListener('click', function () { go(i - 1); });
+      c.querySelector('.next').addEventListener('click', function () { go(i + 1); });
+
+      // 键盘 ←/→：仅当本节可见时响应
+      c.tabIndex = 0;
+      c.addEventListener('keydown', function (e) {
+        if (e.key === 'ArrowLeft') { go(i - 1); e.preventDefault(); }
+        if (e.key === 'ArrowRight') { go(i + 1); e.preventDefault(); }
+      });
+
+      // 触摸滑动
+      var x0 = null;
+      c.addEventListener('touchstart', function (e) { x0 = e.touches[0].clientX; }, { passive: true });
+      c.addEventListener('touchend', function (e) {
+        if (x0 === null) return;
+        var dx = e.changedTouches[0].clientX - x0;
+        if (Math.abs(dx) > 40) go(dx < 0 ? i + 1 : i - 1);
+        x0 = null;
+      });
+
+      go(0);
+    });
+
+    // 锚点高亮定位（gallery.html#admin / #ext）
+    if (location.hash) {
+      var el = document.querySelector(location.hash);
+      if (el) setTimeout(function () { el.scrollIntoView({ behavior: 'smooth' }); }, 60);
+    }
+  </script>
+</body>
+</html>
