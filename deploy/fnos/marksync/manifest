@@ -17,4 +17,4 @@ service_port=8888
 checkport=true
 ctl_stop=true
 
-changelog=界面预览改为管理端/插件端两组自动轮播（GIF）并新增交互图库页（gallery.html 可左右切换细看）；文案修订（"删除墓碑"改为"删除的书签"）；修订号 -6。
+changelog=界面预览改为管理端/插件端两组自动轮播（GIF）并新增交互图库页（gallery.html 可左右切换细看）；文案修订（删除同步措辞更直白易懂）；修订号 -6。
