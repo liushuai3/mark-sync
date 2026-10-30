@@ -41,7 +41,13 @@
       <label>
         <input type="checkbox" id="autoSync"> 启用自动同步
       </label>
-      <p class="help-text">书签变更将自动同步到云端（间隔 ≥ 5 分钟）</p>
+      <p class="help-text">书签将按下方间隔自动增量同步到云端</p>
+    </div>
+
+    <div class="form-group">
+      <label for="syncInterval">自动同步间隔（分钟）</label>
+      <input type="number" id="syncInterval" min="1" max="1440" step="1" placeholder="30">
+      <p class="help-text">默认 30 分钟，可设 1–1440 分钟（24 小时）。保存后立即生效，无需重启浏览器</p>
     </div>
 
     <div class="button-group">

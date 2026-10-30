@@ -48,4 +48,4 @@ bookmark-format-sample.json  # 云端书签 JSON 数据格式示例
 - **浏览器兼容**：`background.js` 通过检测全局 `browser` vs `chrome` 对象兼容 Firefox/Chrome
 - **chrome.storage.sync**：存储访问令牌、自动同步开关、Gist 描述、加密密钥；注意 `QUOTA_BYTES` 限制
 - **Service Worker 生命周期**：`background.js` 在空闲时会被浏览器终止，状态靠 `chrome.storage` 和定时器重建
-- **自动同步**：书签变化后防抖 3 秒执行，两次同步至少间隔 5 分钟，另设 30 分钟定期检查作为兜底
+- **自动同步**：`chrome.alarms` 定时增量同步，默认 30 分钟一次（设置页可自定义 1–1440 分钟），±30 秒抖动；无书签事件监听（v3 起云端为真相源，SRS §9.2）

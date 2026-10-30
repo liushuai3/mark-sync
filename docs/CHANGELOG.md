@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## v4.1 — 2026-10-28
+
+**扩展：自动同步间隔可自定义**
+
+| 变更 | 说明 |
+| --- | --- |
+| 新增设置项「自动同步间隔（分钟）」 | options 页输入框，范围 1–1440（24 h），存储键 `sync_interval_minutes`（chrome.storage.sync） |
+| 默认周期 5 分钟 → 30 分钟 | `background.js` 不再硬编码周期；`ensureAlarm` 比对 `alarm.periodInMinutes` 与配置，不一致即重建 |
+| 保存即生效 | `chrome.storage.onChanged` 监听 `sync_interval_minutes`，变更后立即重新 arm alarm，无需重启浏览器 |
+| 防御性钳制 | 非法/越界值钳制到 [1, 1440]，非数值回退默认 30（options 保存时校验 + background 双重兜底） |
+| 版本 | 扩展 4.0 → 4.1（manifest.json / web extension-meta 同步） |
+
+> 存量用户迁移：已有 `autoSync` 开关状态保留；从未设置过间隔的用户首次升级后按新默认 30 分钟执行
+> （旧 5 分钟 alarm 在下次 SW 唤醒时因周期不匹配被重建）。
+
 ## v3.0.0-beta.1 — 2026-07-15
 
 **重大重构：双向增量同步引擎**

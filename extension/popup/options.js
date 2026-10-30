@@ -2,7 +2,8 @@
  * MarkSync options page (v3)
  *
  * 存储 key:
- *   chrome.storage.sync : marksync_api_url, marksync_token, autoSync, backend_type
+ *   chrome.storage.sync : marksync_api_url, marksync_token, autoSync, backend_type,
+ *                         sync_interval_minutes (v4.1, 自动同步间隔)
  *
  * Legacy v2 keys to clean:
  *   sync   : accessToken, encryptionKey, gistDescription
@@ -11,7 +12,10 @@
 
 const DEFAULT_API_URL = 'https://marksync.zcoolq.cn/api';
 const DEFAULT_HOST = 'https://marksync.zcoolq.cn/*';
-const STORAGE_KEYS = ['marksync_api_url', 'marksync_token', 'autoSync'];
+const DEFAULT_SYNC_INTERVAL_MINUTES = 30;
+const SYNC_INTERVAL_MIN = 1;
+const SYNC_INTERVAL_MAX = 1440; // 24 h
+const STORAGE_KEYS = ['marksync_api_url', 'marksync_token', 'autoSync', 'sync_interval_minutes'];
 const LEGACY_SYNC_KEYS = ['accessToken', 'encryptionKey', 'gistDescription'];
 const LEGACY_LOCAL_KEYS = ['accessToken', 'encryptionKey', 'gistDescription'];
 
@@ -47,6 +51,20 @@ function sendMessage(msg) {
 
 function normalizeApiUrl(raw) {
   return String(raw || '').trim().replace(/\/+$/, '');
+}
+
+/**
+ * Read + validate the interval input. Returns an integer in
+ * [SYNC_INTERVAL_MIN, SYNC_INTERVAL_MAX], or null when invalid — the
+ * caller surfaces a status message instead of saving.
+ */
+function readSyncInterval() {
+  const raw = document.getElementById('syncInterval').value.trim();
+  if (raw === '') return DEFAULT_SYNC_INTERVAL_MINUTES;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || !Number.isInteger(n)) return null;
+  if (n < SYNC_INTERVAL_MIN || n > SYNC_INTERVAL_MAX) return null;
+  return n;
 }
 
 /**
@@ -152,10 +170,17 @@ async function handleSave() {
   const apiUrl = normalizeApiUrl(document.getElementById('marksyncApiUrl').value);
   const token = document.getElementById('marksyncToken').value.trim();
   const autoSync = document.getElementById('autoSync').checked;
+  const syncInterval = readSyncInterval();
 
   if (!apiUrl) return showStatus('请输入 API URL', 'error');
   if (!token) return showStatus('请输入 API Token', 'error');
   if (!token.startsWith('mks_')) return showStatus('Token 格式错误，应以 mks_ 开头', 'error');
+  if (syncInterval === null) {
+    return showStatus(
+      `自动同步间隔需为 ${SYNC_INTERVAL_MIN}–${SYNC_INTERVAL_MAX} 的整数（分钟）`,
+      'error'
+    );
+  }
 
   btn.disabled = true;
   try {
@@ -171,6 +196,7 @@ async function handleSave() {
       marksync_api_url: apiUrl,
       marksync_token: token,
       autoSync,
+      sync_interval_minutes: syncInterval,
       backend_type: 'marksync',
     });
 
@@ -228,6 +254,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('marksyncApiUrl').value = state.marksync_api_url || DEFAULT_API_URL;
   document.getElementById('marksyncToken').value = state.marksync_token || '';
   document.getElementById('autoSync').checked = state.autoSync || false;
+  document.getElementById('syncInterval').value =
+    state.sync_interval_minutes || DEFAULT_SYNC_INTERVAL_MINUTES;
 
   // Eye toggle
   document.getElementById('toggleTokenBtn').addEventListener('click', () => {

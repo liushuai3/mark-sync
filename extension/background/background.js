@@ -1,7 +1,8 @@
 // MarkSync v3.0 background service worker
 //
 // Responsibilities (SRS §6.2 / FR-2 / FR-3 / FR-11):
-//   1. Schedule bidirectional sync every 5 minutes via chrome.alarms
+//   1. Schedule bidirectional sync on a configurable period (default
+//      30 minutes, options page `sync_interval_minutes`) via chrome.alarms
 //      (±30 s jitter, no local bookmark event listeners).
 //   2. Route popup messages (SYNC_NOW / FORCE_UPLOAD / INITIAL_MERGE /
 //      GET_STATE).
@@ -31,29 +32,50 @@ const ALARM_NAME = 'marksync-sync';
 // P1-2: one-shot alarm carrying the ±30s jitter delay (survives SW death,
 // unlike setTimeout).
 const JITTER_ALARM_NAME = 'marksync-sync-jitter';
-const PERIOD_MINUTES = 5; // FR-2.1
+const PERIOD_MINUTES_DEFAULT = 30; // FR-2.1 default; user-configurable in options (1–1440)
+const PERIOD_MINUTES_MIN = 1;
+const PERIOD_MINUTES_MAX = 1440; // 24 h — protect against absurd values
 const JITTER_MS = 30_000; // FR-2.3  (±30 s)
 const BADGE_CLEAR_MS = 2500; // FR-11.2
 
 // ─── Config ────────────────────────────────────────────────────────────
 // Keys are the v2 keys used by popup/options.js (`marksync_api_url`,
-// `marksync_token`, `autoSync`) in chrome.storage.sync — do NOT invent new keys.
+// `marksync_token`, `autoSync`) in chrome.storage.sync, plus v4.1
+// `sync_interval_minutes` (auto-sync period, user-configurable).
 async function getConfig() {
   return new Promise((resolve) => {
     chrome.storage.sync.get(
-      ['marksync_api_url', 'marksync_token', 'autoSync'],
+      ['marksync_api_url', 'marksync_token', 'autoSync', 'sync_interval_minutes'],
       (state) => {
         resolve({
           apiUrl: (state && state.marksync_api_url) || '',
           token: (state && state.marksync_token) || '',
           // P0-fix: the options page's "启用自动同步" checkbox writes this
           // key, but the background never read it — the alarm ran a sync
-          // cycle every 5 minutes no matter what the switch said.
+          // cycle every period no matter what the switch said.
           autoSync: !!(state && state.autoSync),
+          periodMinutes: clampPeriod(
+            Number(state && state.sync_interval_minutes)
+          ),
         });
       }
     );
   });
+}
+
+/**
+ * Clamp a user-provided interval to [PERIOD_MINUTES_MIN,
+ * PERIOD_MINUTES_MAX]. Anything non-numeric / non-finite falls back to the
+ * default — the options page validates on save, this is the last line of
+ * defense for hand-edited storage.sync values.
+ */
+function clampPeriod(raw) {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return PERIOD_MINUTES_DEFAULT;
+  const rounded = Math.round(n);
+  if (rounded < PERIOD_MINUTES_MIN) return PERIOD_MINUTES_MIN;
+  if (rounded > PERIOD_MINUTES_MAX) return PERIOD_MINUTES_MAX;
+  return rounded;
 }
 
 // ─── Badge helper (FR-11) ──────────────────────────────────────────────
@@ -332,20 +354,46 @@ async function forceUpload() {
 }
 
 // ─── Alarm wiring ─────────────────────────────────────────────────────
+/**
+ * Make sure the periodic alarm exists AND carries the configured period.
+ * `chrome.alarms.create` with an existing name replaces it, so comparing
+ * against `existing.periodInMinutes` is how a saved interval change takes
+ * effect (on the next SW wake / browser start / storage change).
+ */
 function ensureAlarm() {
-  try {
-    chrome.alarms.get(ALARM_NAME, (existing) => {
-      if (!existing) {
-        chrome.alarms.create(ALARM_NAME, { periodInMinutes: PERIOD_MINUTES });
-        console.log(
-          `[MarkSync/background] alarm '${ALARM_NAME}' created (period=${PERIOD_MINUTES}min)`
-        );
+  getConfig()
+    .then(({ periodMinutes }) => {
+      try {
+        chrome.alarms.get(ALARM_NAME, (existing) => {
+          if (!existing || existing.periodInMinutes !== periodMinutes) {
+            chrome.alarms.create(ALARM_NAME, { periodInMinutes: periodMinutes });
+            console.log(
+              `[MarkSync/background] alarm '${ALARM_NAME}' armed (period=${periodMinutes}min)`
+            );
+          }
+        });
+      } catch (err) {
+        console.error('[MarkSync/background] ensureAlarm failed', err);
       }
+    })
+    .catch((err) => {
+      console.error('[MarkSync/background] ensureAlarm failed', err);
     });
-  } catch (err) {
-    console.error('[MarkSync/background] ensureAlarm failed', err);
-  }
 }
+
+// Options page saved a new interval — re-arm immediately instead of
+// waiting for the next SW wake. (`sync_interval_minutes` lives in
+// chrome.storage.sync, so `areaName` is 'sync'.)
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === 'sync' && changes.sync_interval_minutes) {
+    console.log(
+      `[MarkSync/background] sync_interval_minutes changed ` +
+        `(${changes.sync_interval_minutes.oldValue ?? 'default'} → ` +
+        `${changes.sync_interval_minutes.newValue})`
+    );
+    ensureAlarm();
+  }
+});
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (!alarm) return;
