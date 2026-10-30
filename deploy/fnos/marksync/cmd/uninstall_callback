@@ -1,3 +1,45 @@
 #!/bin/bash
-# Docker 应用：fnOS 托管 compose 生命周期，无额外动作。
+# MarkSync — 卸载后回调
+# 根据卸载向导 wizard_delete_data 的选择处理数据：
+#   - 保留数据（默认）：不做任何清理，下次安装可继续使用。
+#   - 删除数据：清除应用数据目录（书签数据库、备份与配置）。
+# 数据路径优先读 uninstall_init 记录的文件；缺失时再尝试解析软链兜底。
+set -uo pipefail
+
+LOG="${TRIM_TEMP_LOGFILE:-/dev/null}"
+log() { echo "[marksync] $1" > "$LOG" 2>/dev/null || true; }
+
+PATH_FILE="/tmp/marksync-uninstall-datapath"
+
+if [ "${wizard_delete_data:-no}" != "yes" ]; then
+    log "用户选择保留应用数据，跳过清理"
+    rm -f "$PATH_FILE" 2>/dev/null || true
+    exit 0
+fi
+
+DATA_DIR=""
+if [ -f "$PATH_FILE" ]; then
+    DATA_DIR="$(head -n1 "$PATH_FILE" 2>/dev/null || true)"
+fi
+if [ -z "$DATA_DIR" ]; then
+    DATA_DIR="$(readlink -f /var/apps/marksync/var 2>/dev/null || true)"
+fi
+
+# 安全护栏：仅当解析结果确实是 marksync 的 @appdata 目录时才允许删除，
+# 防止变量异常导致 rm -rf 误删其他路径。
+case "$DATA_DIR" in
+    */@appdata/marksync)
+        if [ -d "$DATA_DIR" ]; then
+            rm -rf "$DATA_DIR" 2>/dev/null || true
+            log "已删除应用数据: $DATA_DIR"
+        else
+            log "数据目录不存在，无需清理: ${DATA_DIR:-<空>}"
+        fi
+        ;;
+    *)
+        log "拒绝清理：数据路径校验未通过（${DATA_DIR:-<空>}），数据已按保留处理"
+        ;;
+esac
+
+rm -f "$PATH_FILE" 2>/dev/null || true
 exit 0

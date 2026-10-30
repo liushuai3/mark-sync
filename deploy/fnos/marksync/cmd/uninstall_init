@@ -1,3 +1,20 @@
 #!/bin/bash
-# Docker 应用：fnOS 托管 compose 生命周期，无额外动作。
+# MarkSync — 卸载前回调
+# 记录应用数据目录的真实路径到 /tmp，供 uninstall_callback 使用。
+# 卸载过程中 fnOS 会移除 /var/apps/marksync 软链，callback 阶段可能已无法解析，
+# 因此在 init 阶段（目录仍存在时）先把 readlink 结果固定下来。
+set -uo pipefail
+
+LOG="${TRIM_TEMP_LOGFILE:-/dev/null}"
+PATH_FILE="/tmp/marksync-uninstall-datapath"
+
+DATA_DIR="$(readlink -f /var/apps/marksync/var 2>/dev/null || true)"
+
+if [ -n "$DATA_DIR" ] && [ -d "$DATA_DIR" ]; then
+    printf '%s\n' "$DATA_DIR" > "$PATH_FILE"
+    echo "[marksync] 已记录应用数据路径: $DATA_DIR" > "$LOG" 2>/dev/null || true
+else
+    echo "[marksync] 未能解析应用数据路径（/var/apps/marksync/var 不存在），卸载时将无法执行数据清理" > "$LOG" 2>/dev/null || true
+fi
+
 exit 0

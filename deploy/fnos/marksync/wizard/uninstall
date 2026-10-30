@@ -1,0 +1,30 @@
+[
+  {
+    "stepTitle": "卸载 MarkSync 书签同步",
+    "items": [
+      {
+        "type": "radio",
+        "field": "wizard_delete_data",
+        "label": "应用数据处理",
+        "initValue": "no",
+        "options": [
+          {
+            "label": "保留数据（默认 — 下次安装时书签与账号继续可用）",
+            "value": "no"
+          },
+          {
+            "label": "删除应用数据（书签数据库、备份与配置，不可恢复）",
+            "value": "yes"
+          }
+        ],
+        "rules": [
+          {
+            "required": true,
+            "message": "请选择保留或删除应用数据"
+          }
+        ],
+        "helpText": "数据存放在应用数据目录（如 /vol1/@appdata/marksync/data）。保留数据不影响重新安装后继续使用；选择删除后书签数据库将被永久清除，且所有浏览器扩展将无法再连接本实例。"
+      }
+    ]
+  }
+]
