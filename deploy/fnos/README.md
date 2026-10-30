@@ -57,7 +57,7 @@ fnpack build          # 产出 marksync.fpk
 > - **浏览器全覆盖**：扩展已上架 Chrome 应用商店与 Edge 加载项商店，Firefox 用 zip 安装
 >
 > **三步开始使用**
-> 1. 本应用一键安装，安装向导中设置管理员账号（默认端口 8888）
+> 1. 本应用一键安装，安装向导中设置管理员账号（默认端口 8887）
 > 2. 登录 Web 管理台 → Token 管理 → 创建 API Token
 > 3. 各浏览器安装 MarkSync 扩展，填入 NAS 地址与 Token，即刻同步
 >
@@ -87,11 +87,11 @@ fnpack build          # 产出 marksync.fpk
 ### 安装说明（给审核/用户）
 
 - 安装时可设置管理员账号（也可留空，启动后开放注册，首个注册用户即管理员）
-- 浏览器扩展安装后，在扩展设置页填入 `http://<NAS地址>:8888/api` 与 API Token
+- 浏览器扩展安装后，在扩展设置页填入 `http://<NAS地址>:8887/api` 与 API Token
 - Chrome / Edge 商店搜索「MarkSync 书签同步」可直接安装扩展
 
 ## 已知边界
 
 - `platform=x86`：fnOS 第三方应用当前仅 x86_64；镜像为 amd64 单架构
-- 默认端口 8888（manifest service_port），与其它应用冲突时飞牛会提示调整
+- 默认端口 8887（manifest service_port），与其它应用冲突时飞牛会提示调整
 - 官方商店上架需人工进群提交，开发者后台（developer.fnnas.com）上线前无自助通道
