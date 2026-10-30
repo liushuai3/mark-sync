@@ -2,7 +2,7 @@ services:
   marksync:
     # 镜像 tag 与 manifest 版本严格对齐（不一致会报 manifest unknown）
     image: zcoolq/marksync:4.0.0
-    container_name: marksync
+    container_name: marksync-app
     restart: unless-stopped
     ports:
       - "${TRIM_SERVICE_PORT}:3000"

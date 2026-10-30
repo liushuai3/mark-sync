@@ -94,4 +94,5 @@ fnpack build          # 产出 marksync.fpk
 
 - `platform=x86`：fnOS 第三方应用当前仅 x86_64；镜像为 amd64 单架构
 - 默认端口 8887（manifest service_port），与其它应用冲突时飞牛会提示调整
+- **可与手动 docker 部署共存**：fpk 容器名固定 `marksync-app`（端口 8887、数据在 fnOS 应用目录），手动部署建议容器名 `marksync`（如 `deploy/docker-compose.yml`，端口 8888、数据在工程目录）——名称/端口/数据路径三者均隔离，互不影响；注意两套实例是**独立数据库**，书签不互通
 - 官方商店上架需人工进群提交，开发者后台（developer.fnnas.com）上线前无自助通道
