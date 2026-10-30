@@ -1,0 +1,11 @@
+services:
+  marksync-https:
+    image: nginx:alpine
+    container_name: marksync-https
+    restart: always
+    ports:
+      - "8443:8443"
+    volumes:
+      - ./nginx-https.conf:/etc/nginx/conf.d/default.conf:ro
+      - /usr/trim/nginx/conf/server.crt:/etc/nginx/certs/server.crt:ro
+      - /usr/trim/nginx/conf/server.key:/etc/nginx/certs/server.key:ro
