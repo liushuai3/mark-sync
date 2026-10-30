@@ -1,5 +1,5 @@
 appname=marksync
-version=4.0.0-7
+version=4.0.0-8
 display_name=MarkSync 书签同步
 desc=<p>MarkSync 是一套<b>自托管的浏览器书签多端双向同步系统</b>：NAS 上一个轻量服务 + Chrome / Edge / Firefox 浏览器扩展，让电脑、手机、平板的所有书签保持一致，数据只存放在你自己的 NAS 上，不出家门。</p><h3>核心能力</h3><ul><li><b>双向增量同步</b>：每台设备独立 UUID，只传输变更内容；默认每 30 分钟自动同步（间隔可在设置页按分钟自定义）</li><li><b>可靠不丢数据</b>：删除的书签自动同步到所有设备、字段级 LWW 冲突自动合并、推送失败自动回滚基线、分批推送与断网退避重试</li><li><b>自动去重</b>：重复书签自动收敛，扩展内也可手动一键清理</li><li><b>多用户与安全</b>：JWT 登录、API Token 管理、多账号数据隔离</li><li><b>Web 管理台开箱即用</b>：仪表盘、书签管理、扩展下载、同步日志、备份恢复，并提供完整 REST API</li><li><b>浏览器全覆盖</b>：扩展已上架 Chrome 应用商店与 Edge 加载项商店，Firefox 用 zip 安装</li></ul><h3>三步开始使用</h3><ol><li>本应用一键安装，安装向导中设置管理员账号（默认端口 8888）</li><li>登录 Web 管理台 → Token 管理 → 创建 API Token</li><li>各浏览器安装 MarkSync 扩展，填入 NAS 地址与 Token，即刻同步</li></ol><h3>界面预览</h3><p><b>管理端 · Web 管理台</b>（仪表盘 / 扩展下载页，自动左右轮播）</p><p><img src="https://img.zcoolq.cn/admin-carousel.gif" alt="管理端界面轮播" width="100%" loading="lazy"></p><p><b>插件端 · 浏览器扩展</b>（同步状态弹窗 / 设置页，自动左右轮播）</p><p><img src="https://img.zcoolq.cn/ext-carousel.gif" alt="插件端界面轮播" width="360" loading="lazy"></p><p>想逐张细看？<a href="https://img.zcoolq.cn/gallery.html" target="_blank">打开交互图库 ↗</a>（左右切换 / 键盘 ←→）</p><p>开源免费，源码与文档见 GitHub / Gitee 仓库。</p>
 source=thirdparty
@@ -17,4 +17,4 @@ service_port=8888
 checkport=true
 ctl_stop=true
 
-changelog=扩展 v4.1：自动同步间隔支持自定义（1–1440 分钟），默认改为 30 分钟；修订号 -7。
+changelog=扩展 v4.2：修复自定义 API 域名无法授权报错（新域名保存/测试时弹出浏览器授权框，点「允许」即可）；管理台跳转与帮助页链接跟随自建实例地址；修订号 -8。

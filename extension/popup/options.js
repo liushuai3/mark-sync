@@ -11,7 +11,6 @@
  */
 
 const DEFAULT_API_URL = 'https://marksync.zcoolq.cn/api';
-const DEFAULT_HOST = 'https://marksync.zcoolq.cn/*';
 const DEFAULT_SYNC_INTERVAL_MINUTES = 30;
 const SYNC_INTERVAL_MIN = 1;
 const SYNC_INTERVAL_MAX = 1440; // 24 h
@@ -69,7 +68,12 @@ function readSyncInterval() {
 
 /**
  * Ensure host permission for the given API URL.
- * SRS §11.3: `https://marksync.zcoolq.cn/*` is a granted default; skip prompt when covered.
+ *
+ * MV3: `chrome.permissions.request()` may only ask for origins declared in
+ * the manifest — `optional_host_permissions` now covers all https/http
+ * origins, so ANY self-hosted address can be authorized at runtime.
+ * Chrome then shows its native "允许 MarkSync 访问 …" prompt; already-granted
+ * origins (e.g. after a previous save) resolve silently.
  */
 async function ensureHostPermission(apiUrl) {
   let originPattern;
@@ -112,25 +116,43 @@ function showStatus(message, kind = 'success', durationMs = 3500) {
 async function handleTestConnection() {
   const btn = document.getElementById('testConnBtn');
   const result = document.getElementById('testResult');
-  btn.disabled = true;
-  result.className = 'test-result';
-  result.textContent = '测试中...';
-  result.style.display = 'block';
+  const testApiUrl = normalizeApiUrl(document.getElementById('marksyncApiUrl').value);
+  const testToken = document.getElementById('marksyncToken').value.trim();
 
-  const apiUrl = normalizeApiUrl(document.getElementById('marksyncApiUrl').value);
-  const token = document.getElementById('marksyncToken').value.trim();
-
-  if (!apiUrl || !token) {
+  if (!testApiUrl || !testToken) {
     result.className = 'test-result err';
     result.textContent = '请先填写 API URL 和 Token';
     btn.disabled = false;
     return;
   }
 
+  btn.disabled = true;
+  result.className = 'test-result';
+  result.textContent = '测试中...';
+  result.style.display = 'block';
+
+  // New origins must be authorized BEFORE the fetch — without host
+  // permission the request is subject to CORS and fails confusingly.
+  // Inside the click gesture, so Chrome can show its native prompt.
   try {
-    const resp = await fetch(`${apiUrl}/auth/me`, {
+    const granted = await ensureHostPermission(testApiUrl);
+    if (!granted) {
+      result.className = 'test-result err';
+      result.textContent = '❌ 未授权访问该域名，无法测试（可在保存时再次授权）';
+      btn.disabled = false;
+      return;
+    }
+  } catch (err) {
+    result.className = 'test-result err';
+    result.textContent = `❌ 授权失败：${err.message || err}`;
+    btn.disabled = false;
+    return;
+  }
+
+  try {
+    const resp = await fetch(`${testApiUrl}/auth/me`, {
       method: 'GET',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${testToken}` },
     });
     if (!resp.ok) {
       let msg = `HTTP ${resp.status}`;

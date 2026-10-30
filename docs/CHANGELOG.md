@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## v4.2 — 2026-10-28
+
+**修复：自定义 API 域名无法授权（"Only permissions specified in the manifest may be requested."）**
+
+| 变更 | 说明 |
+| --- | --- |
+| `optional_host_permissions` 由单一域名改通配 | 原 manifest 只声明 `https://marksync.zcoolq.cn/*`，MV3 规定 `permissions.request()` 只能请求清单内 origin——填任何新域名保存必报错。现声明全部 `https`/`http` 源，任意自建地址保存/测试时都会弹出 Chrome 原生授权框，用户点「允许」即可 |
+| 「测试连接」前置授权 | 原先直接 fetch，新域名会被 CORS 拦得不明不白；现在点击后先请求 host 权限再发请求，授权在用户手势内触发原生弹窗 |
+| 拒绝授权的体验 | 授权被拒时给出明确提示（"未授权访问该域名…"）而非静默失败；修复拒绝路径未复位测试按钮的 bug |
+| help 页链接跟随实例 | help.html 内写死的 `marksync.zcoolq.cn` 跳转全部改为相对路径（`/app/extension`、`/app/tokens`、`/app/backups`、`/`），自建实例的帮助页不再跳回官方站；footer 版本号改用 `__EXT_VERSION__` 占位符（原先写死 v3.1.6） |
+| Firefox 最低版本 | `strict_min_version` 121 → 128（`optional_host_permissions` 通配符需 Firefox 128+） |
+
+> 管理台跳转地址说明：扩展弹窗的「管理台」按钮本就从已保存的 API URL 推导（去掉 `/api` 后缀）——此前自定义域名保存失败导致配置未落库，跳转才一直指向默认域名；修复授权后保存成功，跳转即跟随新地址。
+
 ## v4.1 — 2026-10-28
 
 **扩展：自动同步间隔可自定义**
