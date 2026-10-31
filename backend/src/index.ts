@@ -20,7 +20,8 @@ import security from './routes/security.js';
 import { startBackupScheduler } from './lib/backup.js';
 import { startTombstoneCleanup } from './lib/tombstone-cleanup.js';
 import { startSyncLogCleanup } from './lib/sync-log-cleanup.js';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { createServer as createHttpsServer } from 'node:https';
 
 const app = new Hono();
 
@@ -124,3 +125,32 @@ serve(
     ensureAdminUser().catch((err) => logger.error('ensureAdminUser failed', err));
   }
 );
+
+// Optional HTTPS listener (same app, dual protocol in one process).
+// Enabled when HTTPS_PORT > 0 and both TLS paths are provided; a broken
+// cert must not take down the HTTP listener, so failures are logged only.
+if (config.httpsPort > 0 && config.tlsCertPath && config.tlsKeyPath) {
+  try {
+    const key = readFileSync(config.tlsKeyPath);
+    const cert = readFileSync(config.tlsCertPath);
+    serve(
+      {
+        fetch: app.fetch,
+        port: config.httpsPort,
+        hostname: '0.0.0.0',
+        // @hono/node-server: https = serverOptions (node:https opts) + createServer swap
+        serverOptions: { key, cert },
+        createServer: createHttpsServer,
+      },
+      (info) => {
+        logger.info(
+          `MarkSync backend (https) listening on https://0.0.0.0:${info.port} (cert=${config.tlsCertPath})`
+        );
+      }
+    );
+  } catch (err) {
+    logger.error(
+      `HTTPS listener disabled: cannot load TLS cert/key (${config.tlsCertPath}, ${config.tlsKeyPath}): ${err}`
+    );
+  }
+}

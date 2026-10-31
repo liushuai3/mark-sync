@@ -2,6 +2,10 @@ import 'dotenv/config';
 
 export const config = {
   port: Number(process.env.PORT || 3000),
+  // HTTPS 双协议监听（可选）：三者齐全时额外启动 https server，http 保持不变
+  httpsPort: Number(process.env.HTTPS_PORT || 0),
+  tlsCertPath: process.env.TLS_CERT_PATH || '',
+  tlsKeyPath: process.env.TLS_KEY_PATH || '',
   nodeEnv: process.env.NODE_ENV || 'development',
   dbPath: process.env.DB_PATH || './data/bookmarks.db',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
