@@ -1,25 +1,46 @@
 #!/bin/bash
 # MarkSync fnOS 生命周期脚本
-# Docker 应用的启动/停止由 fnOS 的 docker-project 资源托管，
-# 这里只需准确返回运行状态。
+# Docker 项目由 fnOS 从 config/resource 托管 compose 生命周期。
+# 兜底逻辑：应用中心「自动运行新应用」设置（默认关闭）为关时，fnOS 安装
+# 后只创建容器不启动（容器停在 created 状态、APP_STARTED 事件照发），导致
+# 端口无服务。start 时按需拉起 created 状态容器；stop 对称兜底。
+# status 以 fpk 自身容器名 marksync-app 为准（勿用手动部署容器名 marksync，
+# 两套实例独立，否则手动实例在跑会误报 fpk 应用运行中）。
 
-CONTAINER_NAME="marksync"
+CONTAINERS="marksync-app marksync-https-app"
 
-case "$1" in
+state_of() {
+  docker inspect -f '{{.State.Status}}' "$1" 2>/dev/null
+}
+
+case "${1:-}" in
   start)
+    for c in $CONTAINERS; do
+      s="$(state_of "$c")"
+      # created（fnOS 仅创建不启动）/ exited / stopped 统一拉起；
+      # 容器不存在时 state_of 为空，跳过交给 compose 流程
+      if [ -n "$s" ] && [ "$s" != "running" ]; then
+        docker start "$c" >/dev/null 2>&1 || true
+      fi
+    done
     exit 0
     ;;
   stop)
+    for c in $CONTAINERS; do
+      if [ "$(state_of "$c")" = "running" ]; then
+        docker stop "$c" >/dev/null 2>&1 || true
+      fi
+    done
     exit 0
     ;;
   status)
-    if docker inspect "$CONTAINER_NAME" 2>/dev/null | grep -q '"Status": "running"'; then
+    if [ "$(state_of marksync-app)" = "running" ]; then
       exit 0
     fi
     exit 3
     ;;
   *)
-    echo "Unknown command: $1" > "$TRIM_TEMP_LOGFILE"
+    echo "Unknown command: ${1:-}" > "${TRIM_TEMP_LOGFILE:-/dev/stderr}"
     exit 1
     ;;
 esac
