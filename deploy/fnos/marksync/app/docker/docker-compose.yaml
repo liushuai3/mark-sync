@@ -6,7 +6,6 @@ services:
     restart: unless-stopped
     ports:
       - "${TRIM_SERVICE_PORT}:3000"
-      - "${wizard_https_port:-8443}:3443"
     environment:
       - NODE_ENV=production
       - PORT=3000
@@ -17,15 +16,8 @@ services:
       - LOG_LEVEL=info
       - ADMIN_USERNAME=${wizard_admin_user:-}
       - ADMIN_PASSWORD=${wizard_admin_password:-}
-      # 单容器双协议：应用进程内同时监听 http:3000 与 https:3443，
-      # 证书复用 fnOS 系统自签证书（只读挂载）
-      - HTTPS_PORT=3443
-      - TLS_CERT_PATH=/etc/marksync/tls/server.crt
-      - TLS_KEY_PATH=/etc/marksync/tls/server.key
     volumes:
       - "${TRIM_PKGVAR}/data:/app/backend/data"
-      - "/usr/trim/nginx/conf/server.crt:/etc/marksync/tls/server.crt:ro"
-      - "/usr/trim/nginx/conf/server.key:/etc/marksync/tls/server.key:ro"
     healthcheck:
       test: ["CMD-SHELL", "node -e 'fetch(`http://localhost:3000/health`).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))'"]
       interval: 30s

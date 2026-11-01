@@ -7,7 +7,7 @@
 # status 以 fpk 自身容器名 marksync-app 为准（勿用手动部署容器名 marksync，
 # 两套实例独立，否则手动实例在跑会误报 fpk 应用运行中）。
 
-CONTAINERS="marksync-app marksync-https-app"
+CONTAINERS="marksync-app"
 
 state_of() {
   docker inspect -f '{{.State.Status}}' "$1" 2>/dev/null
